@@ -314,12 +314,38 @@ Scripts/Core/
 - Internamente usa el nuevo sistema si está disponible
 - Si ServiceLocator no está inicializado, usa el comportamiento original
 
-### Fase 3 - Player
-- [ ] Extraer `PlayerEffectsController`
-- [ ] Extraer `GroundDetector`
-- [ ] Crear `IInputService`
-- [ ] Refactorizar `PlayerController`
+### Fase 3 - Player ✅ COMPLETADA
+- [x] Crear `IInputService` interface
+- [x] Implementar `UnityInputService`
+- [x] Crear componente `GroundDetector`
+- [x] Crear componente `PlayerEffects`
+- [x] Refactorizar `PlayerController` (compatible hacia atrás)
 - [ ] **PROBAR: Movimiento del jugador funciona**
+
+#### Archivos creados en Fase 3:
+```
+Scripts/Core/
+├── Domain/
+│   └── Interfaces/
+│       └── IInputService.cs
+└── Infrastructure/
+    └── Services/
+        └── UnityInputService.cs
+
+Scripts/Gameplay/Player/
+└── Components/
+    ├── GroundDetector.cs
+    └── PlayerEffects.cs
+```
+
+#### Archivo modificado:
+- `Gameplay/Player/Controller/PlayerController.cs` - Usa componentes opcionales
+
+#### Notas importantes:
+- Los nuevos componentes son **opcionales** (backward compatible)
+- Si `GroundDetector` está presente, lo usa; si no, usa el código original
+- Si `PlayerEffects` está presente, lo usa; si no, usa el código original
+- El `IInputService` se obtiene del ServiceLocator si está disponible
 
 ### Fase 4 - UI
 - [ ] Crear `LoginPresenter`

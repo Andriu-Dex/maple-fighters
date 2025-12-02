@@ -50,6 +50,7 @@ namespace Scripts.Core.Infrastructure
 
             // Registrar servicios en orden de dependencia
             RegisterSaveService();
+            RegisterInputService();
             RegisterNetworkConfiguration();
             RegisterApiProvider();
 
@@ -75,6 +76,12 @@ namespace Scripts.Core.Infrastructure
             }
 
             ServiceLocator.Register<ISaveService>(saveService);
+        }
+
+        private void RegisterInputService()
+        {
+            var inputService = new UnityInputService();
+            ServiceLocator.Register<IInputService>(inputService);
         }
 
         private void RegisterNetworkConfiguration()

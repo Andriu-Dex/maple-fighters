@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using ScriptableObjects.Configurations;
+using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure;
 using Scripts.Editor;
+using Scripts.Gameplay.Player.Components;
 using Scripts.Gameplay.Player.States;
 using Scripts.UI.Focus;
 using UnityEngine;
@@ -10,6 +13,14 @@ using UnityEngine;
 
 namespace Scripts.Gameplay.Player
 {
+    /// <summary>
+    /// Controlador principal del jugador.
+    /// Gestiona el estado del jugador y coordina los diferentes componentes.
+    /// 
+    /// Componentes opcionales (agregar al mismo GameObject para mejor organización):
+    /// - GroundDetector: Detección de suelo
+    /// - PlayerEffects: Efectos visuales
+    /// </summary>
     [RequireComponent(typeof(Collider2D))]
     public class PlayerController : MonoBehaviour
     {
@@ -57,6 +68,11 @@ namespace Scripts.Gameplay.Player
 
         private FocusStateController focusStateController;
 
+        // Componentes opcionales (Fase 3 - Refactorización)
+        private GroundDetector groundDetector;
+        private PlayerEffects playerEffects;
+        private IInputService inputService;
+
         private void Awake()
         {
             playerStateBehaviours = new Dictionary<PlayerStates, IPlayerStateBehaviour>
@@ -73,6 +89,9 @@ namespace Scripts.Gameplay.Player
             };
             playerStateBehaviour = playerStateBehaviours[playerState];
             focusStateController = FindObjectOfType<FocusStateController>();
+
+            // Intentar obtener componentes opcionales
+            TryGetOptionalComponents();
         }
 
         private void Start()
@@ -181,16 +200,20 @@ namespace Scripts.Gameplay.Player
 
         public void CreateRushEffect()
         {
-            var position =
-                transform.position;
-            var rotation =
-                Quaternion.identity;
-            var direction =
-                GetDirection();
-            var effect =
-                Instantiate(rushEffect, position, rotation);
+            // Usar componente PlayerEffects si está disponible
+            if (playerEffects != null)
+            {
+                playerEffects.CreateRushEffect(GetDirection());
+                return;
+            }
 
-            var x = effect.transform.localScale.x * direction.x;
+            // Fallback al comportamiento original
+            var position = transform.position;
+            var rotation = Quaternion.identity;
+            var dir = GetDirection();
+            var effect = Instantiate(rushEffect, position, rotation);
+
+            var x = effect.transform.localScale.x * dir.x;
             var y = effect.transform.localScale.y;
             var z = effect.transform.localScale.z;
 
@@ -199,16 +222,20 @@ namespace Scripts.Gameplay.Player
 
         public void CreateAttackEffect()
         {
-            var position =
-                attackEffectSpawnPosition.position;
-            var rotation =
-                attackEffectSpawnPosition.rotation;
-            var direction =
-                GetDirection();
-            var effect =
-                Instantiate(attackEffect, position, rotation);
+            // Usar componente PlayerEffects si está disponible
+            if (playerEffects != null)
+            {
+                playerEffects.CreateAttackEffect(GetDirection());
+                return;
+            }
 
-            var x = effect.transform.localScale.x * direction.x;
+            // Fallback al comportamiento original
+            var position = attackEffectSpawnPosition.position;
+            var rotation = attackEffectSpawnPosition.rotation;
+            var dir = GetDirection();
+            var effect = Instantiate(attackEffect, position, rotation);
+
+            var x = effect.transform.localScale.x * dir.x;
             var y = effect.transform.localScale.y;
             var z = effect.transform.localScale.z;
 
@@ -232,13 +259,26 @@ namespace Scripts.Gameplay.Player
 
         public bool IsMoving()
         {
-            var horizontal = Utils.GetAxis(Axes.Horizontal, isRaw: true);
+            // Usar IInputService si está disponible
+            if (inputService != null)
+            {
+                return Mathf.Abs(inputService.HorizontalRaw) > 0;
+            }
 
+            // Fallback al comportamiento original
+            var horizontal = Utils.GetAxis(Axes.Horizontal, isRaw: true);
             return Mathf.Abs(horizontal) > 0;
         }
 
         public bool IsGrounded()
         {
+            // Usar componente GroundDetector si está disponible
+            if (groundDetector != null)
+            {
+                return groundDetector.IsGrounded;
+            }
+
+            // Fallback al comportamiento original
             var isGrounded = false;
 
             if (groundTransform != null)
@@ -247,11 +287,57 @@ namespace Scripts.Gameplay.Player
                 var radius = overlapCircleRadius;
                 var layerMask = groundLayerMask;
 
-                isGrounded =
-                    Physics2D.OverlapCircle(position, radius, layerMask);
+                isGrounded = Physics2D.OverlapCircle(position, radius, layerMask);
             }
 
             return isGrounded;
         }
+
+        #region Optional Components (Fase 3)
+
+        /// <summary>
+        /// Intenta obtener los componentes opcionales del mismo GameObject o hijos.
+        /// </summary>
+        private void TryGetOptionalComponents()
+        {
+            // Intentar obtener GroundDetector
+            groundDetector = GetComponent<GroundDetector>();
+            if (groundDetector == null)
+            {
+                groundDetector = GetComponentInChildren<GroundDetector>();
+            }
+
+            // Intentar obtener PlayerEffects
+            playerEffects = GetComponent<PlayerEffects>();
+            if (playerEffects == null)
+            {
+                playerEffects = GetComponentInChildren<PlayerEffects>();
+            }
+
+            // Intentar obtener IInputService del ServiceLocator
+            ServiceLocator.TryGet(out inputService);
+
+            // Si hay GroundDetector, configurarlo con los valores del Inspector
+            if (groundDetector != null)
+            {
+                groundDetector.Configure(groundTransform, overlapCircleRadius, groundLayerMask);
+            }
+
+            // Si hay PlayerEffects, configurarlo con los prefabs
+            if (playerEffects != null)
+            {
+                playerEffects.Configure(rushEffect, attackEffect, attackEffectSpawnPosition);
+            }
+        }
+
+        /// <summary>
+        /// Obtiene el servicio de input actual.
+        /// </summary>
+        public IInputService GetInputService()
+        {
+            return inputService;
+        }
+
+        #endregion
     }
 }
