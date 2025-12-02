@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using Game.Messages;
+using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure;
 using Scripts.Gameplay.Graphics;
 using Scripts.Gameplay.Player;
 using Scripts.Services;
@@ -9,6 +11,11 @@ using UnityEngine;
 
 namespace Scripts.Gameplay.Entity
 {
+    /// <summary>
+    /// Contenedor de entidades del juego.
+    /// Refactorizado para usar IEntityRepository e IEntityFactory del ServiceLocator.
+    /// Mantiene compatibilidad hacia atrás si los servicios no están disponibles.
+    /// </summary>
     public class EntityContainer : MonoBehaviour
     {
         public static EntityContainer GetInstance()
@@ -23,14 +30,32 @@ namespace Scripts.Gameplay.Entity
 
         private static EntityContainer instance;
 
-        private IEntity localEntity;
         private IGameApi gameApi;
-
-        private Dictionary<int, IEntity> collection;
+        
+        // Nuevos servicios inyectados
+        private IEntityRepository entityRepository;
+        private IEntityFactory entityFactory;
+        
+        // Fallback: colección local si el repositorio no está disponible
+        private Dictionary<int, IEntity> localCollection;
+        private IEntity localEntity;
 
         private void Awake()
         {
-            collection = new Dictionary<int, IEntity>();
+            // Intentar obtener servicios del ServiceLocator
+            ServiceLocator.TryGet(out entityRepository);
+            ServiceLocator.TryGet(out entityFactory);
+            
+            // Fallback si no hay repositorio
+            if (entityRepository == null)
+            {
+                localCollection = new Dictionary<int, IEntity>();
+                Debug.Log("[EntityContainer] Using local collection (fallback mode)");
+            }
+            else
+            {
+                Debug.Log("[EntityContainer] Using IEntityRepository from ServiceLocator");
+            }
         }
 
         private void Start()
@@ -57,12 +82,15 @@ namespace Scripts.Gameplay.Entity
             var position = new Vector2(x, y);
             var direction = message.Direction;
 
-            localEntity = AddEntity(id, name, position);
+            var entity = AddEntity(id, name, position);
+            
+            // Guardar referencia local y en repositorio
+            localEntity = entity;
+            entityRepository?.SetLocalEntity(entity);
 
-            if (direction != 0)
+            if (entity != null && direction != 0)
             {
-                var entityGameObject = localEntity.GameObject;
-
+                var entityGameObject = entity.GameObject;
                 StartCoroutine(SetEntityDirection(entityGameObject, direction));
             }
         }
@@ -83,7 +111,7 @@ namespace Scripts.Gameplay.Entity
                 var position = new Vector2(gameObject.X, gameObject.Y);
                 var direction = gameObject.Direction;
 
-                if (collection.ContainsKey(id))
+                if (ContainsEntity(id))
                 {
                     Debug.LogWarning($"The entity with id #{id} already exists.");
                 }
@@ -91,10 +119,9 @@ namespace Scripts.Gameplay.Entity
                 {
                     var entity = AddEntity(id, name, position);
 
-                    if (direction != 0)
+                    if (entity != null && direction != 0)
                     {
                         var entityGameObject = entity.GameObject;
-
                         StartCoroutine(SetEntityDirection(entityGameObject, direction));
                     }
                 }
@@ -114,7 +141,7 @@ namespace Scripts.Gameplay.Entity
         {
             foreach (var id in gameObjectIds)
             {
-                if (collection.TryGetValue(id, out var entity))
+                if (TryGetEntityInternal(id, out var entity))
                 {
                     RemoveEntity(entity);
                 }
@@ -127,19 +154,36 @@ namespace Scripts.Gameplay.Entity
         {
             IEntity entity = null;
 
-            var gameObject = Utils.CreateGameObject(name, position);
-            if (gameObject != null)
+            // Usar factory si está disponible, sino el método original
+            if (entityFactory != null)
             {
-                entity = gameObject.GetComponent<IEntity>();
-
-                if (entity != null)
+                var gameEntity = entityFactory.CreateEntity(name, position);
+                entity = gameEntity as IEntity;
+            }
+            else
+            {
+                var gameObject = Utils.CreateGameObject(name, position);
+                if (gameObject != null)
                 {
-                    entity.Id = id;
-
-                    collection.Add(id, entity);
-
-                    Debug.Log($"Added a new entity with id #{id}");
+                    entity = gameObject.GetComponent<IEntity>();
                 }
+            }
+
+            if (entity != null)
+            {
+                entity.Id = id;
+
+                // Agregar al repositorio o colección local
+                if (entityRepository != null)
+                {
+                    entityRepository.AddEntity(id, entity);
+                }
+                else
+                {
+                    localCollection.Add(id, entity);
+                }
+
+                Debug.Log($"Added a new entity with id #{id}");
             }
 
             return entity;
@@ -147,40 +191,89 @@ namespace Scripts.Gameplay.Entity
 
         private void RemoveEntity(IEntity entity)
         {
-            var gameObject = entity.GameObject;
             var id = entity.Id;
-            var fadeEffectProvider =
-                gameObject.GetComponent<IFadeEffectProvider>();
-            if (fadeEffectProvider != null)
+
+            // Usar factory para destruir si está disponible
+            if (entityFactory != null)
             {
-                var fadeEffect = fadeEffectProvider.Provide();
-                if (fadeEffect != null)
+                entityFactory.DestroyEntity(entity);
+            }
+            else
+            {
+                // Fallback: destrucción manual
+                var gameObject = entity.GameObject;
+                var fadeEffectProvider = gameObject.GetComponent<IFadeEffectProvider>();
+                
+                if (fadeEffectProvider != null)
                 {
-                    fadeEffect.UnFadeAndDestroyGameObject();
+                    var fadeEffect = fadeEffectProvider.Provide();
+                    if (fadeEffect != null)
+                    {
+                        fadeEffect.UnFadeAndDestroyGameObject();
+                    }
+                    else
+                    {
+                        Destroy(gameObject);
+                    }
                 }
                 else
                 {
                     Destroy(gameObject);
                 }
             }
+
+            // Remover del repositorio o colección local
+            if (entityRepository != null)
+            {
+                entityRepository.RemoveEntity(id);
+            }
             else
             {
-                Destroy(gameObject);
+                localCollection.Remove(id);
             }
-
-            collection.Remove(id);
 
             Debug.Log($"Removed an entity with id #{id}");
         }
 
+        /// <summary>
+        /// Verifica si existe una entidad con el ID dado.
+        /// </summary>
+        private bool ContainsEntity(int id)
+        {
+            if (entityRepository != null)
+            {
+                return entityRepository.ContainsEntity(id);
+            }
+            return localCollection.ContainsKey(id);
+        }
+
+        /// <summary>
+        /// Intenta obtener una entidad por ID (uso interno).
+        /// </summary>
+        private bool TryGetEntityInternal(int id, out IEntity entity)
+        {
+            if (entityRepository != null)
+            {
+                var found = entityRepository.TryGetEntity(id, out var gameEntity);
+                entity = gameEntity as IEntity;
+                return found;
+            }
+            return localCollection.TryGetValue(id, out entity);
+        }
+
         public IEntity GetLocalEntity()
         {
+            // Preferir el repositorio si está disponible
+            if (entityRepository != null)
+            {
+                return entityRepository.GetLocalEntity() as IEntity;
+            }
             return localEntity;
         }
 
         public bool GetRemoteEntity(int id, out IEntity entity)
         {
-            return collection.TryGetValue(id, out entity);
+            return TryGetEntityInternal(id, out entity);
         }
 
         private IEnumerator SetEntityDirection(GameObject entity, float direction)

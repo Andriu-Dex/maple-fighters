@@ -1,11 +1,14 @@
-﻿using UnityEngine;
+﻿using Scripts.Core.Domain.Interfaces;
+using UnityEngine;
 
 namespace Scripts.Gameplay.Entity
 {
-    public interface IEntity
+    /// <summary>
+    /// Interfaz para entidades del juego.
+    /// Hereda de IGameEntity para compatibilidad con el sistema de repositorio.
+    /// </summary>
+    public interface IEntity : IGameEntity
     {
-        int Id { get; set; }
-
-        GameObject GameObject { get; }
+        // Id y GameObject heredados de IGameEntity
     }
 }

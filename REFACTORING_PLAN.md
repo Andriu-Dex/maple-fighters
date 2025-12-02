@@ -384,12 +384,42 @@ Scripts/UI/Authenticator/
 - Los métodos de validación consolidados simplifican el código del controller
 - Los Presenters están preparados pero el Controller actual los ignora (gradual migration)
 
-### Fase 5 - Entidades
-- [ ] Crear `IEntityRepository`
-- [ ] Crear `IEntityFactory`
-- [ ] Refactorizar `EntityContainer`
-- [ ] Actualizar `CharacterCreator`
+### Fase 5 - Entidades ✅ COMPLETADA
+- [x] Crear `IEntityRepository` interface
+- [x] Crear `IGameEntity` interface (para desacoplar de IEntity)
+- [x] Crear `IEntityFactory` interface
+- [x] Implementar `EntityRepository`
+- [x] Implementar `EntityFactory`
+- [x] Refactorizar `EntityContainer` (compatible hacia atrás)
+- [x] Actualizar `IEntity` para heredar de `IGameEntity`
+- [x] Registrar servicios en ServiceLocator
 - [ ] **PROBAR: Spawn de jugadores local y remoto**
+
+#### Archivos creados en Fase 5:
+```
+Scripts/Core/
+├── Domain/
+│   └── Interfaces/
+│       ├── IEntityRepository.cs
+│       └── IEntityFactory.cs
+└── Infrastructure/
+    ├── Repositories/
+    │   └── EntityRepository.cs
+    └── Factories/
+        └── EntityFactory.cs
+```
+
+#### Archivos modificados:
+- `EntityContainer.cs` - Usa IEntityRepository e IEntityFactory del ServiceLocator con fallback
+- `IEntity.cs` - Hereda de IGameEntity para compatibilidad con el sistema de repositorio
+- `ServiceLocatorInitializer.cs` - Registra IEntityRepository e IEntityFactory
+
+#### Notas importantes:
+- `IGameEntity` es la interfaz base en Core/Domain para evitar dependencias circulares
+- `IEntity` hereda de `IGameEntity` para mantener compatibilidad con código existente
+- El `EntityContainer` detecta automáticamente si los servicios están disponibles
+- Si no hay ServiceLocator, usa una colección local (modo fallback)
+- El patrón Repository permite acceso a entidades desde cualquier lugar sin FindObjectOfType
 
 ### Fase 6 - Tests
 - [ ] Configurar NUnit en Unity
