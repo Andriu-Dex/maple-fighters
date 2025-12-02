@@ -252,13 +252,36 @@ public interface IEntityFactory
 
 ## 📝 CHECKLIST POR FASE
 
-### Fase 1 - Fundamentos
-- [ ] Crear estructura de carpetas `Core/`
-- [ ] Implementar `ISaveService`
-- [ ] Implementar `JsonSaveService`
-- [ ] Implementar `ServiceLocator`
-- [ ] Reemplazar PlayerPrefs en AuthenticatorController
+### Fase 1 - Fundamentos ✅ EN PROGRESO
+- [x] Crear estructura de carpetas `Core/`
+- [x] Implementar `ISaveService`
+- [x] Implementar `JsonSaveService`
+- [x] Implementar `PlayerPrefsSaveService` (fallback)
+- [x] Implementar `ServiceLocator`
+- [x] Implementar `ServiceLocatorInitializer`
+- [x] Reemplazar PlayerPrefs en AuthenticatorController
 - [ ] **PROBAR: Login/Logout funciona correctamente**
+
+#### Archivos creados en Fase 1:
+```
+Scripts/Core/
+├── Domain/
+│   └── Interfaces/
+│       └── ISaveService.cs
+└── Infrastructure/
+    ├── Persistence/
+    │   ├── JsonSaveService.cs
+    │   └── PlayerPrefsSaveService.cs
+    ├── ServiceLocator.cs
+    └── ServiceLocatorInitializer.cs
+```
+
+#### Instrucciones para probar:
+1. Abrir Unity
+2. En la escena inicial, crear un GameObject vacío llamado "Service Locator"
+3. Agregar el componente `ServiceLocatorInitializer`
+4. Ejecutar el juego y probar login
+5. Verificar que el email se guarda correctamente
 
 ### Fase 2 - APIs
 - [ ] Crear `IApiFactory` interface

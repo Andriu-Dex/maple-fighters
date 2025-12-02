@@ -1,4 +1,6 @@
 ﻿using Scripts.Constants;
+using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure;
 using Scripts.UI.CharacterSelection;
 using Scripts.UI.GameServerBrowser;
 using Scripts.UI.MenuBackground;
@@ -317,20 +319,40 @@ namespace Scripts.UI.Authenticator
 
         private void SaveLoginEmail(string email)
         {
-            PlayerPrefs.SetString("email", email);
-            PlayerPrefs.Save();
+            var saveService = ServiceLocator.Get<ISaveService>();
+            if (saveService != null)
+            {
+                saveService.SetString(SaveKeys.Email, email);
+                saveService.Save();
+            }
+            else
+            {
+                // Fallback a PlayerPrefs si el servicio no está disponible
+                PlayerPrefs.SetString(SaveKeys.Email, email);
+                PlayerPrefs.Save();
+            }
         }
 
         private string ProvideLoginEmail()
         {
-            var email = string.Empty;
-
-            if (PlayerPrefs.HasKey("email"))
+            var saveService = ServiceLocator.Get<ISaveService>();
+            if (saveService != null)
             {
-                email = PlayerPrefs.GetString("email");
+                return saveService.GetString(SaveKeys.Email, string.Empty);
             }
+            
+            // Fallback a PlayerPrefs si el servicio no está disponible
+            return PlayerPrefs.HasKey(SaveKeys.Email) 
+                ? PlayerPrefs.GetString(SaveKeys.Email) 
+                : string.Empty;
+        }
 
-            return email;
+        /// <summary>
+        /// Claves de guardado para evitar strings mágicos.
+        /// </summary>
+        private static class SaveKeys
+        {
+            public const string Email = "user_email";
         }
     }
 }

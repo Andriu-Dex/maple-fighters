@@ -1,0 +1,111 @@
+using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure.Persistence;
+using UnityEngine;
+
+namespace Scripts.Core.Infrastructure
+{
+    /// <summary>
+    /// Inicializa el ServiceLocator con los servicios core del juego.
+    /// Este componente debe ejecutarse antes que cualquier otro script que use servicios.
+    /// 
+    /// Configurar en Unity:
+    ///   1. Crear un GameObject vacío llamado "Service Locator"
+    ///   2. Agregar este componente
+    ///   3. En Project Settings > Script Execution Order, poner este script primero (-100)
+    ///   O simplemente colocarlo en la primera escena del juego.
+    /// </summary>
+    public class ServiceLocatorInitializer : MonoBehaviour
+    {
+        [Header("Persistence Settings")]
+        [Tooltip("Tipo de servicio de persistencia a usar")]
+        [SerializeField]
+        private PersistenceType persistenceType = PersistenceType.Json;
+
+        private static ServiceLocatorInitializer instance;
+
+        private void Awake()
+        {
+            // Singleton pattern para evitar duplicados entre escenas
+            if (instance != null && instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            InitializeServices();
+        }
+
+        private void InitializeServices()
+        {
+            if (ServiceLocator.IsInitialized)
+            {
+                Debug.Log("[ServiceLocatorInitializer] Services already initialized.");
+                return;
+            }
+
+            // Registrar servicio de persistencia
+            RegisterSaveService();
+
+            ServiceLocator.IsInitialized = true;
+            Debug.Log("[ServiceLocatorInitializer] All core services initialized.");
+        }
+
+        private void RegisterSaveService()
+        {
+            ISaveService saveService;
+
+            switch (persistenceType)
+            {
+                case PersistenceType.Json:
+                    saveService = new JsonSaveService();
+                    break;
+                case PersistenceType.PlayerPrefs:
+                    saveService = new PlayerPrefsSaveService();
+                    break;
+                default:
+                    saveService = new JsonSaveService();
+                    break;
+            }
+
+            ServiceLocator.Register<ISaveService>(saveService);
+        }
+
+        private void OnApplicationQuit()
+        {
+            // Guardar datos pendientes antes de cerrar
+            if (ServiceLocator.TryGet<ISaveService>(out var saveService))
+            {
+                saveService.Save();
+                Debug.Log("[ServiceLocatorInitializer] Data saved on application quit.");
+            }
+        }
+
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            // Guardar datos cuando la app se pausa (importante en móviles)
+            if (pauseStatus && ServiceLocator.TryGet<ISaveService>(out var saveService))
+            {
+                saveService.Save();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tipos de persistencia disponibles.
+    /// </summary>
+    public enum PersistenceType
+    {
+        /// <summary>
+        /// Guarda datos en archivo JSON en Application.persistentDataPath
+        /// </summary>
+        Json,
+        
+        /// <summary>
+        /// Usa PlayerPrefs de Unity (registro en Windows, plist en macOS/iOS)
+        /// </summary>
+        PlayerPrefs
+    }
+}
