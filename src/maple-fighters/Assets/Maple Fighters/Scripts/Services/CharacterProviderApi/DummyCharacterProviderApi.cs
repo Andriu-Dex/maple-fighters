@@ -1,12 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure;
 using UnityEngine;
 
 namespace Scripts.Services.CharacterProviderApi
 {
     using Random = UnityEngine.Random;
 
+    /// <summary>
+    /// API dummy para proveer personajes en modo offline/desarrollo.
+    /// Refactorizado para usar ISaveService e IUserSession.
+    /// </summary>
     public class DummyCharacterProviderApi : MonoBehaviour, ICharacterProviderApi
     {
         public static DummyCharacterProviderApi GetInstance()
@@ -31,11 +37,16 @@ namespace Scripts.Services.CharacterProviderApi
         public Action<long, string> GetCharactersCallback { get; set; }
 
         private Dictionary<int, CharacterData> characters;
-        private const string key = "characters";
+        private const string StorageKey = "characters";
+        
+        private ISaveService saveService;
 
         private void Awake()
         {
             characters = new Dictionary<int, CharacterData>();
+            
+            // Intentar obtener el servicio de persistencia
+            ServiceLocator.TryGet(out saveService);
         }
 
         private void OnDestroy()
@@ -88,10 +99,12 @@ namespace Scripts.Services.CharacterProviderApi
         {
             if (characters.Count == 0)
             {
-                var userMetadata = FindObjectOfType<UserMetadata>();
-                var userId = userMetadata?.UserData.id ?? string.Empty;
-
-                GetCharacters(userId);
+                // Usar IUserSession del ServiceLocator en lugar de FindObjectOfType
+                var userId = GetCurrentUserId();
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    GetCharacters(userId);
+                }
             }
 
             if (characters.TryGetValue(characterid, out CharacterData characterData))
@@ -127,7 +140,7 @@ namespace Scripts.Services.CharacterProviderApi
         public void GetCharacters(string userid)
         {
             var statusCode = (long)StatusCodes.Ok;
-            var json = PlayerPrefs.GetString(key);
+            var json = LoadCharactersJson();
 
             var characterDataCollection = JsonUtility.FromJson<CharacterDataCollection>(json);
             if (characterDataCollection != null)
@@ -161,9 +174,46 @@ namespace Scripts.Services.CharacterProviderApi
         {
             var characterCollection = GetCharacterCollection();
             var characterDataCollection = new CharacterDataCollection(characterCollection);
+            var json = characterDataCollection.ToString();
 
-            PlayerPrefs.DeleteKey(key);
-            PlayerPrefs.SetString(key, characterDataCollection.ToString());
+            // Usar ISaveService si está disponible
+            if (saveService != null)
+            {
+                saveService.SetString(StorageKey, json);
+                saveService.Save();
+            }
+            else
+            {
+                // Fallback a PlayerPrefs
+                PlayerPrefs.DeleteKey(StorageKey);
+                PlayerPrefs.SetString(StorageKey, json);
+                PlayerPrefs.Save();
+            }
+        }
+
+        private string LoadCharactersJson()
+        {
+            // Usar ISaveService si está disponible
+            if (saveService != null)
+            {
+                return saveService.GetString(StorageKey, string.Empty);
+            }
+            
+            // Fallback a PlayerPrefs
+            return PlayerPrefs.GetString(StorageKey, string.Empty);
+        }
+
+        private string GetCurrentUserId()
+        {
+            // Intentar obtener del ServiceLocator
+            if (ServiceLocator.TryGet<IUserSession>(out var userSession))
+            {
+                return userSession.UserId;
+            }
+            
+            // Fallback a FindObjectOfType (mantener compatibilidad)
+            var userMetadata = FindObjectOfType<UserMetadata>();
+            return userMetadata?.UserData?.id ?? string.Empty;
         }
 
         private CharacterData[] GetCharacterCollection()

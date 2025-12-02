@@ -1,21 +1,37 @@
 using UI;
 using UnityEngine;
 using Scripts.Services;
+using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure;
 
 namespace Scripts.UI.PlayerData
 {
+    /// <summary>
+    /// Controlador para mostrar datos del jugador (nivel, experiencia, salud).
+    /// Refactorizado para usar IUserSession del ServiceLocator.
+    /// </summary>
     public class PlayerDataController : MonoBehaviour
     {
         private IPlayerDataView playerDataView;
         private IPlayerExperiencePointsView playerExperiencePointsView;
 
-        private UserMetadata userMetadata;
+        private IUserSession userSession;
 
         private void Awake()
         {
-            userMetadata = FindObjectOfType<UserMetadata>();
-            userMetadata.CharacterExperiencePointsAdded += OnCharacterExperiencePointsAdded;
-            userMetadata.CharacterLevelUp += OnCharacterLevelUp;
+            // Intentar obtener del ServiceLocator primero
+            if (!ServiceLocator.TryGet(out userSession))
+            {
+                // Fallback a FindObjectOfType para compatibilidad
+                var userMetadata = FindObjectOfType<UserMetadata>();
+                userSession = userMetadata;
+            }
+
+            if (userSession != null)
+            {
+                userSession.CharacterExperiencePointsAdded += OnCharacterExperiencePointsAdded;
+                userSession.CharacterLevelUp += OnCharacterLevelUp;
+            }
         }
 
         private void Start()
@@ -26,8 +42,11 @@ namespace Scripts.UI.PlayerData
 
         private void OnDestroy()
         {
-            userMetadata.CharacterExperiencePointsAdded -= OnCharacterExperiencePointsAdded;
-            userMetadata.CharacterLevelUp -= OnCharacterLevelUp;
+            if (userSession != null)
+            {
+                userSession.CharacterExperiencePointsAdded -= OnCharacterExperiencePointsAdded;
+                userSession.CharacterLevelUp -= OnCharacterLevelUp;
+            }
         }
 
         public void SetPlayerHealth(int value)
@@ -42,20 +61,24 @@ namespace Scripts.UI.PlayerData
 
         private void CreatePlayerDataWindow()
         {
+            if (userSession == null) return;
+
             playerDataView = UICreator
                 .GetInstance()
                 .Create<PlayerDataWindow>();
-            playerDataView.SetLevel(userMetadata.CharacterLevel);
-            playerDataView.SetName(userMetadata.CharacterName);
+            playerDataView.SetLevel(userSession.CharacterLevel);
+            playerDataView.SetName(userSession.CharacterName);
         }
 
         private void CreatePlayerExperiencePointsBar()
         {
+            if (userSession == null) return;
+
             playerExperiencePointsView = UICreator
                 .GetInstance()
                 .Create<PlayerExperiencePointsBar>();
-            playerExperiencePointsView.SetMaxExperiencePoints(userMetadata.GetMaxExperiencePoints());
-            playerExperiencePointsView.SetExperiencePoints(userMetadata.GetExperiencePoints());
+            playerExperiencePointsView.SetMaxExperiencePoints(userSession.GetMaxExperiencePoints());
+            playerExperiencePointsView.SetExperiencePoints(userSession.GetExperiencePoints());
         }
 
         private void CreateLevelUpEffect()
@@ -73,10 +96,12 @@ namespace Scripts.UI.PlayerData
 
         private void OnCharacterLevelUp(int value)
         {
-            playerDataView?.SetLevel(userMetadata.CharacterLevel);
+            if (userSession == null) return;
 
-            playerExperiencePointsView?.SetMaxExperiencePoints(userMetadata.GetMaxExperiencePoints());
-            playerExperiencePointsView?.SetExperiencePoints(userMetadata.GetExperiencePoints());
+            playerDataView?.SetLevel(userSession.CharacterLevel);
+
+            playerExperiencePointsView?.SetMaxExperiencePoints(userSession.GetMaxExperiencePoints());
+            playerExperiencePointsView?.SetExperiencePoints(userSession.GetExperiencePoints());
 
             CreateLevelUpEffect();
         }
