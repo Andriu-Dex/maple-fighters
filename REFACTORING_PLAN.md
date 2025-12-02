@@ -283,11 +283,36 @@ Scripts/Core/
 4. Ejecutar el juego y probar login
 5. Verificar que el email se guarda correctamente
 
-### Fase 2 - APIs
-- [ ] Crear `IApiFactory` interface
-- [ ] Refactorizar `ApiProvider`
-- [ ] Registrar APIs en ServiceLocator
+### Fase 2 - APIs ✅ COMPLETADA
+- [x] Crear `IApiProvider` interface
+- [x] Crear `INetworkConfiguration` interface
+- [x] Implementar `NetworkConfigurationAdapter`
+- [x] Implementar `ApiProviderService`
+- [x] Refactorizar `ApiProvider` (mantiene compatibilidad)
+- [x] Registrar APIs en ServiceLocator
 - [ ] **PROBAR: Conexión al servidor funciona**
+
+#### Archivos creados en Fase 2:
+```
+Scripts/Core/
+├── Domain/
+│   └── Interfaces/
+│       ├── IApiProvider.cs
+│       └── INetworkConfiguration.cs
+└── Infrastructure/
+    ├── Configuration/
+    │   └── NetworkConfigurationAdapter.cs
+    └── Services/
+        └── ApiProviderService.cs
+```
+
+#### Archivo modificado:
+- `Services/ApiProvider.cs` - Ahora usa ServiceLocator con fallback
+
+#### Notas importantes:
+- El código existente (`ApiProvider.ProvideXxx()`) sigue funcionando
+- Internamente usa el nuevo sistema si está disponible
+- Si ServiceLocator no está inicializado, usa el comportamiento original
 
 ### Fase 3 - Player
 - [ ] Extraer `PlayerEffectsController`

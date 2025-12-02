@@ -1,5 +1,7 @@
 using Scripts.Core.Domain.Interfaces;
+using Scripts.Core.Infrastructure.Configuration;
 using Scripts.Core.Infrastructure.Persistence;
+using Scripts.Core.Infrastructure.Services;
 using UnityEngine;
 
 namespace Scripts.Core.Infrastructure
@@ -46,8 +48,10 @@ namespace Scripts.Core.Infrastructure
                 return;
             }
 
-            // Registrar servicio de persistencia
+            // Registrar servicios en orden de dependencia
             RegisterSaveService();
+            RegisterNetworkConfiguration();
+            RegisterApiProvider();
 
             ServiceLocator.IsInitialized = true;
             Debug.Log("[ServiceLocatorInitializer] All core services initialized.");
@@ -73,8 +77,27 @@ namespace Scripts.Core.Infrastructure
             ServiceLocator.Register<ISaveService>(saveService);
         }
 
+        private void RegisterNetworkConfiguration()
+        {
+            var networkConfig = new NetworkConfigurationAdapter();
+            ServiceLocator.Register<INetworkConfiguration>(networkConfig);
+        }
+
+        private void RegisterApiProvider()
+        {
+            var networkConfig = ServiceLocator.Get<INetworkConfiguration>();
+            var apiProvider = new ApiProviderService(networkConfig);
+            ServiceLocator.Register<IApiProvider>(apiProvider);
+        }
+
         private void OnApplicationQuit()
         {
+            // Limpiar APIs antes de cerrar
+            if (ServiceLocator.TryGet<IApiProvider>(out var apiProvider))
+            {
+                apiProvider.ClearAll();
+            }
+
             // Guardar datos pendientes antes de cerrar
             if (ServiceLocator.TryGet<ISaveService>(out var saveService))
             {
