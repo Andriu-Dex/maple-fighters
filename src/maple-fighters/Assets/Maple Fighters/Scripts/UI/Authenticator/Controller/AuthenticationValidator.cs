@@ -1,11 +1,16 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using Scripts.Constants;
+using Scripts.Core.Domain.Interfaces;
 using Scripts.UI.Utils;
 
 namespace Scripts.UI.Authenticator
 {
-    public class AuthenticationValidator
+    /// <summary>
+    /// Validador de datos de autenticación.
+    /// Implementa IAuthenticationValidator para permitir inyección de dependencias.
+    /// </summary>
+    public class AuthenticationValidator : IAuthenticationValidator
     {
         private const int PasswordLength = 6;
         private const int FirstNameLength = 3;
@@ -99,6 +104,72 @@ namespace Scripts.UI.Authenticator
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Valida los datos de login de forma consolidada.
+        /// </summary>
+        public bool ValidateLoginData(string email, string password, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+
+            if (IsEmptyEmailAddress(email, out errorMessage))
+                return false;
+
+            if (IsInvalidEmailAddress(email, out errorMessage))
+                return false;
+
+            if (IsEmptyPassword(password, out errorMessage))
+                return false;
+
+            if (IsPasswordTooShort(password, out errorMessage))
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Valida los datos de registro de forma consolidada.
+        /// </summary>
+        public bool ValidateRegistrationData(string email, string password, string confirmPassword,
+            string firstName, string lastName, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+
+            if (IsEmptyEmailAddress(email, out errorMessage))
+                return false;
+
+            if (IsInvalidEmailAddress(email, out errorMessage))
+                return false;
+
+            if (IsEmptyPassword(password, out errorMessage))
+                return false;
+
+            if (IsEmptyConfirmPassword(confirmPassword, out errorMessage))
+                return false;
+
+            if (IsPasswordTooShort(password, out errorMessage))
+                return false;
+
+            if (IsConfirmPasswordTooShort(confirmPassword, out errorMessage))
+                return false;
+
+            if (ArePasswordsDoNotMatch(password, confirmPassword, out errorMessage))
+                return false;
+
+            if (IsFirstNameEmpty(firstName, out errorMessage))
+                return false;
+
+            if (IsLastNameEmpty(lastName, out errorMessage))
+                return false;
+
+            if (IsFirstNameTooShort(firstName, out errorMessage))
+                return false;
+
+            if (IsLastNameTooShort(lastName, out errorMessage))
+                return false;
+
+            return true;
         }
     }
 }

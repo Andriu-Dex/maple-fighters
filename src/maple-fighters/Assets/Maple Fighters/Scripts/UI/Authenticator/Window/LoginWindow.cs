@@ -35,6 +35,16 @@ namespace Scripts.UI.Authenticator
 
         public string Password
         {
+            get
+            {
+                if (passwordInputField == null)
+                {
+                    return string.Empty;
+                }
+
+                return passwordInputField.text;
+            }
+
             set
             {
                 if (passwordInputField != null)

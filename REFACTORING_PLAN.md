@@ -347,12 +347,42 @@ Scripts/Gameplay/Player/
 - Si `PlayerEffects` está presente, lo usa; si no, usa el código original
 - El `IInputService` se obtiene del ServiceLocator si está disponible
 
-### Fase 4 - UI
-- [ ] Crear `LoginPresenter`
-- [ ] Simplificar `AuthenticatorController`
-- [ ] Crear `IAuthenticationValidator` interface
-- [ ] Refactorizar `UICreator`
+### Fase 4 - UI ✅ COMPLETADA
+- [x] Crear `ILoginView` interface
+- [x] Crear `LoginPresenter`
+- [x] Crear `RegistrationPresenter`
+- [x] Crear `IAuthenticationValidator` interface
+- [x] Implementar métodos consolidados de validación
+- [x] Registrar `IAuthenticationValidator` en ServiceLocator
+- [x] Simplificar `AuthenticatorController`
 - [ ] **PROBAR: Flujo completo de autenticación**
+
+#### Archivos creados en Fase 4:
+```
+Scripts/Core/
+└── Domain/
+    └── Interfaces/
+        └── IAuthenticationValidator.cs
+
+Scripts/UI/Authenticator/
+├── View/
+│   └── ILoginView.cs
+└── Presenter/
+    ├── LoginPresenter.cs
+    └── RegistrationPresenter.cs
+```
+
+#### Archivos modificados:
+- `AuthenticatorController.cs` - Usa IAuthenticationValidator del ServiceLocator, métodos de validación simplificados
+- `AuthenticationValidator.cs` - Implementa IAuthenticationValidator, nuevos métodos consolidados
+- `LoginWindow.cs` - Implementa ILoginView completo
+- `ServiceLocatorInitializer.cs` - Registra IAuthenticationValidator
+
+#### Notas importantes:
+- Patrón MVP implementado para Login y Registration
+- El validador se obtiene del ServiceLocator con fallback a instancia local
+- Los métodos de validación consolidados simplifican el código del controller
+- Los Presenters están preparados pero el Controller actual los ignora (gradual migration)
 
 ### Fase 5 - Entidades
 - [ ] Crear `IEntityRepository`

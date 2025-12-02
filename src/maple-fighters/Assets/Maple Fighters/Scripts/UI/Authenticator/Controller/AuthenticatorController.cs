@@ -18,12 +18,17 @@ namespace Scripts.UI.Authenticator
         private ILoginView loginView;
         private IRegistrationView registrationView;
 
-        private AuthenticationValidator authenticationValidator;
+        private IAuthenticationValidator authenticationValidator;
         private AuthenticatorInteractor authenticatorInteractor;
 
         private void Awake()
         {
-            authenticationValidator = new AuthenticationValidator();
+            // Intentar obtener el validador del ServiceLocator, con fallback
+            if (!ServiceLocator.TryGet(out authenticationValidator))
+            {
+                authenticationValidator = new AuthenticationValidator();
+            }
+            
             authenticatorInteractor = GetComponent<AuthenticatorInteractor>();
         }
 
@@ -149,10 +154,8 @@ namespace Scripts.UI.Authenticator
             var email = uiAuthenticationDetails.Email;
             var password = uiAuthenticationDetails.Password;
 
-            if (authenticationValidator.IsEmptyEmailAddress(email, out var message)
-                || authenticationValidator.IsInvalidEmailAddress(email, out message)
-                || authenticationValidator.IsEmptyPassword(password, out message)
-                || authenticationValidator.IsPasswordTooShort(password, out message))
+            // Usar el método consolidado de validación
+            if (!authenticationValidator.ValidateLoginData(email, password, out var message))
             {
                 NoticeUtils.ShowNotice(message);
             }
@@ -178,17 +181,8 @@ namespace Scripts.UI.Authenticator
             var firstName = uiRegistrationDetails.FirstName;
             var lastName = uiRegistrationDetails.LastName;
 
-            if (authenticationValidator.IsEmptyEmailAddress(email, out var message)
-                || authenticationValidator.IsInvalidEmailAddress(email, out message)
-                || authenticationValidator.IsEmptyPassword(password, out message)
-                || authenticationValidator.IsEmptyConfirmPassword(confirmPassword, out message)
-                || authenticationValidator.IsPasswordTooShort(password, out message)
-                || authenticationValidator.IsConfirmPasswordTooShort(confirmPassword, out message)
-                || authenticationValidator.ArePasswordsDoNotMatch(password, confirmPassword, out message)
-                || authenticationValidator.IsFirstNameEmpty(firstName, out message)
-                || authenticationValidator.IsLastNameEmpty(lastName, out message)
-                || authenticationValidator.IsFirstNameTooShort(firstName, out message)
-                || authenticationValidator.IsLastNameTooShort(lastName, out message))
+            // Usar el método consolidado de validación
+            if (!authenticationValidator.ValidateRegistrationData(email, password, confirmPassword, firstName, lastName, out var message))
             {
                 NoticeUtils.ShowNotice(message);
             }

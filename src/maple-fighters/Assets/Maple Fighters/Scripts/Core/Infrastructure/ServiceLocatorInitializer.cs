@@ -2,6 +2,7 @@ using Scripts.Core.Domain.Interfaces;
 using Scripts.Core.Infrastructure.Configuration;
 using Scripts.Core.Infrastructure.Persistence;
 using Scripts.Core.Infrastructure.Services;
+using Scripts.UI.Authenticator;
 using UnityEngine;
 
 namespace Scripts.Core.Infrastructure
@@ -53,6 +54,7 @@ namespace Scripts.Core.Infrastructure
             RegisterInputService();
             RegisterNetworkConfiguration();
             RegisterApiProvider();
+            RegisterAuthenticationValidator();
 
             ServiceLocator.IsInitialized = true;
             Debug.Log("[ServiceLocatorInitializer] All core services initialized.");
@@ -95,6 +97,12 @@ namespace Scripts.Core.Infrastructure
             var networkConfig = ServiceLocator.Get<INetworkConfiguration>();
             var apiProvider = new ApiProviderService(networkConfig);
             ServiceLocator.Register<IApiProvider>(apiProvider);
+        }
+
+        private void RegisterAuthenticationValidator()
+        {
+            var validator = new AuthenticationValidator();
+            ServiceLocator.Register<IAuthenticationValidator>(validator);
         }
 
         private void OnApplicationQuit()
