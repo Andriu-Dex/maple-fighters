@@ -17,7 +17,7 @@ namespace Scripts.Services
 
         public event Action<int> CharacterLevelUp;
 
-        public UserData UserData { get; set; }
+        public UserData? UserData { get; set; }
 
         // IUserSession.UserId
         public string UserId => UserData?.id ?? string.Empty;

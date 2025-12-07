@@ -212,7 +212,7 @@ namespace Scripts.Services.CharacterProviderApi
             }
             
             // Fallback a FindObjectOfType (mantener compatibilidad)
-            var userMetadata = FindObjectOfType<UserMetadata>();
+            var userMetadata = FindObjectOfType<Scripts.Services.UserMetadata>();
             return userMetadata?.UserData?.id ?? string.Empty;
         }
 

@@ -64,7 +64,7 @@ namespace Scripts.UI.CharacterSelection
         public void CreateCharacter(int index, UINewCharacterDetails characterDetails)
         {
             var userMetadata = FindObjectOfType<UserMetadata>();
-            var userId = userMetadata?.UserData.id ?? string.Empty;
+            var userId = userMetadata?.UserData?.id ?? string.Empty;
             var characterIndex = index;
             var characterName = characterDetails.GetCharacterName();
             var classIndex = (int)characterDetails.GetCharacterClass();
@@ -116,7 +116,7 @@ namespace Scripts.UI.CharacterSelection
         public void GetCharacters()
         {
             var userMetadata = FindObjectOfType<UserMetadata>();
-            var userId = userMetadata?.UserData.id ?? string.Empty;
+            var userId = userMetadata?.UserData?.id ?? string.Empty;
 
             characterProviderApi?.GetCharacters(userId);
         }
