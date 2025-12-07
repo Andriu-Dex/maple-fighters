@@ -62,6 +62,11 @@ namespace Scripts.UI.PlayerLogin
             this.loginApi = loginApi;
             this.validator = validator;
 
+            // Debug logs para diagnóstico
+            if (view == null) Debug.LogWarning("[PlayerLoginPresenter] view es null");
+            if (loginApi == null) Debug.LogWarning("[PlayerLoginPresenter] loginApi es null");
+            if (validator == null) Debug.LogWarning("[PlayerLoginPresenter] validator es null");
+
             SubscribeToEvents();
             SetState(PlayerLoginState.EnterName);
         }
@@ -233,9 +238,15 @@ namespace Scripts.UI.PlayerLogin
 
         private void HandleNameSubmitted(string playerName)
         {
-            if (!validator.IsValidPlayerName(playerName))
+            // Validar nombre (con fallback si validator es null)
+            if (validator != null && !validator.IsValidPlayerName(playerName))
             {
                 view.StatusMessage = validator.GetValidationMessage(CredentialValidationResult.InvalidPlayerName);
+                return;
+            }
+            else if (validator == null && string.IsNullOrWhiteSpace(playerName))
+            {
+                view.StatusMessage = "El nombre no puede estar vacío";
                 return;
             }
 
@@ -243,21 +254,45 @@ namespace Scripts.UI.PlayerLogin
             SetState(PlayerLoginState.CheckingName);
 
             // Verificar si el jugador existe
-            loginApi?.CheckPlayerExists(currentPlayerName);
+            if (loginApi != null)
+            {
+                loginApi.CheckPlayerExists(currentPlayerName);
+            }
+            else
+            {
+                Debug.LogError("[PlayerLoginPresenter] loginApi es null");
+                view.StatusMessage = "Error: API no disponible";
+                SetState(PlayerLoginState.Error);
+            }
         }
 
         private void HandlePasswordSubmitted(string password)
         {
-            if (!validator.IsValidPasswordFormat(password))
+            // Validar contraseña (con fallback si validator es null)
+            if (validator != null && !validator.IsValidPasswordFormat(password))
             {
                 view.StatusMessage = validator.GetValidationMessage(CredentialValidationResult.InvalidPasswordFormat);
+                return;
+            }
+            else if (validator == null && string.IsNullOrEmpty(password))
+            {
+                view.StatusMessage = "La contraseña no puede estar vacía";
                 return;
             }
 
             SetState(PlayerLoginState.Validating);
 
             // Intentar login
-            loginApi?.Login(currentPlayerName, password);
+            if (loginApi != null)
+            {
+                loginApi.Login(currentPlayerName, password);
+            }
+            else
+            {
+                Debug.LogError("[PlayerLoginPresenter] loginApi es null");
+                view.StatusMessage = "Error: API no disponible";
+                SetState(PlayerLoginState.Error);
+            }
         }
 
         private void OnCheckPlayerExistsCallback(bool exists, string playerName)

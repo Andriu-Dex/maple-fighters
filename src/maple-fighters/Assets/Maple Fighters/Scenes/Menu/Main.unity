@@ -284,7 +284,7 @@ MonoBehaviour:
   loginController: {fileID: 870329707}
   characterViewController: {fileID: 1512247818}
   characterSelectionScene: CharacterSelection
-  useSceneTransition: 1
+  useSceneTransition: 0
   adminPanel: {fileID: 162136941}
 --- !u!114 &870329707
 MonoBehaviour:
