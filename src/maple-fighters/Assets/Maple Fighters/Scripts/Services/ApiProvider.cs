@@ -6,6 +6,7 @@ using Scripts.Services.CharacterProviderApi;
 using Scripts.Services.ChatApi;
 using Scripts.Services.GameApi;
 using Scripts.Services.GameProviderApi;
+using Scripts.Services.PlayerLoginApi;
 using UnityEngine;
 
 namespace Scripts.Services
@@ -213,6 +214,30 @@ namespace Scripts.Services
         }
 
         private static IChatApi chatApi;
+        #endregion
+
+        #region PlayerLoginApi
+        /// <summary>
+        /// Provee la API de login de jugadores.
+        /// </summary>
+        public static IPlayerLoginApi ProvidePlayerLoginApi()
+        {
+            if (playerLoginApi == null)
+            {
+                playerLoginApi = DummyPlayerLoginApi.GetInstance();
+            }
+            return playerLoginApi;
+        }
+
+        /// <summary>
+        /// Elimina la referencia a la API de login de jugadores.
+        /// </summary>
+        public static void RemovePlayerLoginApi()
+        {
+            playerLoginApi = null;
+        }
+
+        private static IPlayerLoginApi playerLoginApi;
         #endregion
     }
 }

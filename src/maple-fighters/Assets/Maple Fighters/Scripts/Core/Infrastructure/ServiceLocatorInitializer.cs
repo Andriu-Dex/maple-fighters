@@ -58,6 +58,7 @@ namespace Scripts.Core.Infrastructure
             RegisterApiProvider();
             RegisterAuthenticationValidator();
             RegisterEntityServices();
+            RegisterPlayerLoginServices();
 
             ServiceLocator.IsInitialized = true;
             Debug.Log("[ServiceLocatorInitializer] All core services initialized.");
@@ -115,6 +116,30 @@ namespace Scripts.Core.Infrastructure
 
             var entityFactory = new EntityFactory();
             ServiceLocator.Register<IEntityFactory>(entityFactory);
+        }
+
+        private void RegisterPlayerLoginServices()
+        {
+            // Obtener el SaveService ya registrado
+            var saveService = ServiceLocator.Get<ISaveService>();
+
+            // Registrar PlayerRepository
+            var playerRepository = new PlayerRepository(saveService);
+            ServiceLocator.Register<IPlayerRepository>(playerRepository);
+
+            // Registrar CredentialValidator
+            var credentialValidator = new CredentialValidator(playerRepository);
+            ServiceLocator.Register<ICredentialValidator>(credentialValidator);
+
+            // Registrar LoginAttemptTracker
+            var loginAttemptTracker = new LoginAttemptTracker(playerRepository);
+            ServiceLocator.Register<ILoginAttemptTracker>(loginAttemptTracker);
+
+            // Registrar AdminService
+            var adminService = new AdminService(playerRepository, loginAttemptTracker);
+            ServiceLocator.Register<IAdminService>(adminService);
+
+            Debug.Log("[ServiceLocatorInitializer] Player login services initialized.");
         }
 
         private void OnApplicationQuit()

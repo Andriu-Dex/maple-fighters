@@ -23,6 +23,11 @@ namespace Scripts.UI.CharacterSelection
         [SerializeField]
         private int minCharacterNameLength;
 
+        [Header("Startup Settings")]
+        [SerializeField]
+        [Tooltip("Si es false, no se muestra automáticamente al iniciar. Usar ShowCharacterSelection() para mostrar manualmente.")]
+        private bool showOnStart = true;
+
         private ILoadingView loadingView;
         private IChooseCharacterView chooseCharacterView;
         private ICharacterView characterView;
@@ -44,6 +49,18 @@ namespace Scripts.UI.CharacterSelection
         }
 
         private void Start()
+        {
+            if (showOnStart)
+            {
+                CreateAndShowCharacterView();
+            }
+        }
+
+        /// <summary>
+        /// Inicia el flujo de selección de personajes.
+        /// Llamar después de un login exitoso.
+        /// </summary>
+        public void ShowCharacterSelection()
         {
             CreateAndShowCharacterView();
         }

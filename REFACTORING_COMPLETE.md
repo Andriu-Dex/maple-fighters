@@ -26,7 +26,12 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
 │   │       ├── IAuthenticationValidator.cs  # Validación de autenticación
 │   │       ├── IEntityRepository.cs         # Repository de entidades
 │   │       ├── IEntityFactory.cs            # Factory de entidades
-│   │       └── IGameEntity.cs               # Entidad base del juego
+│   │       ├── IGameEntity.cs               # Entidad base del juego
+│   │       ├── IPlayerCredentials.cs        # 🆕 Datos de credenciales de jugador
+│   │       ├── IPlayerRepository.cs         # 🆕 Repository de jugadores
+│   │       ├── ICredentialValidator.cs      # 🆕 Validación de credenciales
+│   │       ├── ILoginAttemptTracker.cs      # 🆕 Tracking de intentos de login
+│   │       └── IAdminService.cs             # 🆕 Servicios de administración
 │   │
 │   └── Infrastructure/                      # 🆕 Implementaciones concretas
 │       ├── ServiceLocator.cs                # Localizador de servicios
@@ -38,11 +43,23 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
 │       │   └── NetworkConfigurationAdapter.cs
 │       ├── Services/                        # 🆕 Servicios de aplicación
 │       │   ├── ApiProviderService.cs        # Implementación IApiProvider
-│       │   └── UnityInputService.cs         # Implementación IInputService
+│       │   ├── UnityInputService.cs         # Implementación IInputService
+│       │   ├── CredentialValidator.cs       # 🆕 Validación de credenciales
+│       │   ├── LoginAttemptTracker.cs       # 🆕 Tracking de intentos
+│       │   └── AdminService.cs              # 🆕 Servicio de administración
 │       ├── Repositories/                    # 🆕 Repositorios
-│       │   └── EntityRepository.cs          # Implementación IEntityRepository
+│       │   ├── EntityRepository.cs          # Implementación IEntityRepository
+│       │   └── PlayerRepository.cs          # 🆕 Implementación IPlayerRepository
 │       └── Factories/                       # 🆕 Fábricas
 │           └── EntityFactory.cs             # Implementación IEntityFactory
+│
+├── Services/
+│   └── PlayerLoginApi/                      # 🆕 NUEVA - API de login de jugadores
+│       ├── IPlayerLoginApi.cs               # Interface de la API
+│       ├── DummyPlayerLoginApi.cs           # Implementación local/desarrollo
+│       ├── PlayerLoginSettings.cs           # Configuración del sistema
+│       └── Data/
+│           └── PlayerCredentialsData.cs     # Estructura de datos
 │
 ├── Gameplay/
 │   └── Player/
@@ -51,12 +68,26 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
 │           └── PlayerEffects.cs             # Efectos visuales
 │
 └── UI/
-    └── Authenticator/
-        ├── View/                            # 🆕 Interfaces de vista
-        │   └── ILoginView.cs
-        └── Presenter/                       # 🆕 Presentadores MVP
-            ├── LoginPresenter.cs
-            └── RegistrationPresenter.cs
+    ├── Authenticator/
+    │   ├── View/                            # 🆕 Interfaces de vista
+    │   │   └── ILoginView.cs
+    │   └── Presenter/                       # 🆕 Presentadores MVP
+    │       ├── LoginPresenter.cs
+    │       └── RegistrationPresenter.cs
+    │
+    └── PlayerLogin/                         # 🆕 NUEVA - Sistema de login por nombre
+        ├── Controller/
+        │   ├── PlayerLoginController.cs     # Controlador principal
+        │   └── PlayerLoginIntegration.cs    # Integración con sistema existente
+        ├── View/
+        │   ├── IPlayerLoginView.cs          # Interface de la vista
+        │   └── PlayerLoginState.cs          # Estados del login
+        ├── Presenter/
+        │   └── PlayerLoginPresenter.cs      # Lógica de presentación (MVP)
+        ├── Window/
+        │   └── PlayerLoginWindow.cs         # Ventana UI
+        └── Admin/
+            └── AdminPanel.cs                # Panel de administración
 ```
 
 ---
@@ -70,6 +101,7 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
 | `PlayerController` | Manejaba input, física, efectos, estado, detección de suelo | Extraer responsabilidades a componentes separados | `GroundDetector`, `PlayerEffects`, `IInputService` |
 | `AuthenticatorController` | Mezclaba validación, UI, navegación, persistencia | Separar en capas MVP | `LoginPresenter`, `RegistrationPresenter`, `IAuthenticationValidator` |
 | `EntityContainer` | Creaba, almacenaba y destruía entidades | Separar creación y almacenamiento | `IEntityRepository`, `IEntityFactory` |
+| `PlayerLoginController` | 🆕 Solo coordina flujo de login | Separar validación, tracking, UI | `ICredentialValidator`, `ILoginAttemptTracker`, `PlayerLoginPresenter` |
 
 **Ejemplo concreto - PlayerController:**
 ```csharp
@@ -515,10 +547,14 @@ private void Awake()
 | Input | `IInputService` | `UnityInputService` | Leer input del jugador |
 | Configuración | `INetworkConfiguration` | `NetworkConfigurationAdapter` | Configuración de red |
 | APIs | `IApiProvider` | `ApiProviderService` | Factory de APIs |
-| Validación | `IAuthenticationValidator` | `AuthenticationValidator` | Validar datos de auth |
+| Validación Auth | `IAuthenticationValidator` | `AuthenticationValidator` | Validar datos de auth |
 | Entidades | `IEntityRepository` | `EntityRepository` | Almacenar entidades |
 | Factory | `IEntityFactory` | `EntityFactory` | Crear/destruir entidades |
 | Sesión | `IUserSession` | `UserMetadata` | Datos del usuario/personaje |
+| Jugadores | `IPlayerRepository` | `PlayerRepository` | 🆕 Almacenar jugadores |
+| Credenciales | `ICredentialValidator` | `CredentialValidator` | 🆕 Validar login |
+| Intentos | `ILoginAttemptTracker` | `LoginAttemptTracker` | 🆕 Tracking de intentos |
+| Admin | `IAdminService` | `AdminService` | 🆕 Operaciones admin |
 
 ---
 
@@ -554,15 +590,253 @@ private void Awake()
 
 ---
 
+## 🆕 FASE 7: Sistema de Login por Nombre de Jugador
+
+### Objetivo
+Implementar un sistema de autenticación simplificado basado en nombre de jugador:
+- Usuario ingresa **nombre de personaje**
+- Si existe → pide **contraseña** → entra al juego
+- Si no existe → crea nuevo jugador con contraseña por defecto
+- Sistema de **bloqueo por intentos fallidos** (máx. 3)
+- **Panel de administrador** para desbloquear usuarios
+
+### Arquitectura Implementada
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CAPA DE PRESENTACIÓN (UI)                   │
+├─────────────────────────────────────────────────────────────────┤
+│  PlayerLoginWindow    │  AdminPanel     │  PlayerLoginController │
+│  (Vista - UIElement)  │  (OnGUI Admin)  │  (Coordinador)         │
+└──────────┬────────────┴────────┬────────┴──────────┬────────────┘
+           │                     │                    │
+           ▼                     ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     CAPA DE APLICACIÓN                          │
+├─────────────────────────────────────────────────────────────────┤
+│  PlayerLoginPresenter  │  PlayerLoginIntegration                 │
+│  (Lógica MVP)          │  (Integración con CharacterView)        │
+└──────────┬─────────────┴────────────────────┬───────────────────┘
+           │                                   │
+           ▼                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     CAPA DE SERVICIOS (API)                     │
+├─────────────────────────────────────────────────────────────────┤
+│  IPlayerLoginApi       │  DummyPlayerLoginApi                    │
+│  (Interface)           │  (Implementación local)                 │
+└──────────┬─────────────┴────────────────────┬───────────────────┘
+           │                                   │
+           ▼                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     CAPA DE DOMINIO                             │
+├─────────────────────────────────────────────────────────────────┤
+│  IPlayerRepository     │  ICredentialValidator  │  IAdminService │
+│  ILoginAttemptTracker  │  IPlayerCredentials    │                │
+└──────────┬─────────────┴──────────┬────────────┴────────────────┘
+           │                        │
+           ▼                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     CAPA DE INFRAESTRUCTURA                     │
+├─────────────────────────────────────────────────────────────────┤
+│  PlayerRepository      │  CredentialValidator   │  AdminService  │
+│  LoginAttemptTracker   │  (usa ISaveService)    │                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Flujo de Estados del Login
+
+```
+┌─────────────────┐
+│   ENTER_NAME    │ ◄── Estado inicial
+│ (Ingresa nombre)│
+└────────┬────────┘
+         │ Usuario confirma nombre
+         ▼
+┌─────────────────┐
+│ CHECKING_NAME   │
+│ (Verificando...)│
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+    ▼         ▼
+┌────────┐ ┌──────────────┐
+│ EXISTS │ │  NOT_EXISTS  │
+└───┬────┘ └──────┬───────┘
+    │             │
+    ▼             ▼
+┌──────────────┐ ┌──────────────────┐
+│ENTER_PASSWORD│ │  REGISTERING     │
+│(Pide password)│ │ (Nuevo jugador)  │
+└──────┬───────┘ └────────┬─────────┘
+       │                  │
+       ▼                  ▼
+  ┌────┴────┐        ┌─────────┐
+  │         │        │ SUCCESS │──► Crear personaje
+  ▼         ▼        └─────────┘
+┌────────┐ ┌────────┐
+│SUCCESS │ │ FAILED │
+└───┬────┘ └───┬────┘
+    │          │
+    ▼          ▼
+┌────────┐ ┌─────────────┐
+│ Entrar │ │ attempts++  │
+│ juego  │ │ if >= 3:    │
+└────────┘ │   BLOCKED   │
+           └─────────────┘
+```
+
+### Archivos Creados
+
+#### Capa de Dominio (Interfaces)
+
+| Archivo | Propósito | Principios |
+|---------|-----------|------------|
+| `IPlayerCredentials.cs` | Define estructura de datos del jugador | ISP |
+| `IPlayerRepository.cs` | Contrato para almacenamiento de jugadores | DIP, ISP |
+| `ICredentialValidator.cs` | Contrato para validación de credenciales | SRP, DIP |
+| `ILoginAttemptTracker.cs` | Contrato para tracking de intentos | SRP, ISP |
+| `IAdminService.cs` | Contrato para operaciones administrativas | ISP |
+
+#### Capa de Infraestructura (Implementaciones)
+
+| Archivo | Propósito | Patrón |
+|---------|-----------|--------|
+| `PlayerRepository.cs` | Almacena jugadores usando `ISaveService` | Repository |
+| `CredentialValidator.cs` | Valida nombre y contraseña | Strategy |
+| `LoginAttemptTracker.cs` | Gestiona intentos fallidos y bloqueos | - |
+| `AdminService.cs` | Operaciones de administrador | Facade |
+
+#### Capa de Servicios (API)
+
+| Archivo | Propósito | Patrón |
+|---------|-----------|--------|
+| `IPlayerLoginApi.cs` | Interface de la API de login | - |
+| `DummyPlayerLoginApi.cs` | Implementación local para desarrollo | Strategy |
+| `PlayerLoginSettings.cs` | Constantes de configuración | - |
+| `PlayerCredentialsData.cs` | DTO serializable | DTO |
+
+#### Capa de Presentación (UI)
+
+| Archivo | Propósito | Patrón |
+|---------|-----------|--------|
+| `IPlayerLoginView.cs` | Interface de la vista | MVP |
+| `PlayerLoginState.cs` | Enum de estados de UI | State |
+| `PlayerLoginWindow.cs` | Implementación de la vista | MVP |
+| `PlayerLoginPresenter.cs` | Lógica de presentación | MVP |
+| `PlayerLoginController.cs` | Coordinador del flujo | Controller |
+| `PlayerLoginIntegration.cs` | Integración con sistema existente | Adapter |
+| `AdminPanel.cs` | Panel OnGUI para administrador | - |
+
+### Archivos Modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `ServiceLocatorInitializer.cs` | Registra `IPlayerRepository`, `ICredentialValidator`, `ILoginAttemptTracker`, `IAdminService` |
+| `ApiProvider.cs` | Agrega método `ProvidePlayerLoginApi()` |
+| `CharacterViewController.cs` | Agrega propiedad `showOnStart` y método `ShowCharacterSelection()` |
+| `UserMetadata.cs` | Cambio de `UserData` a `UserData?` (nullable) |
+
+### Principios SOLID Aplicados
+
+| Principio | Aplicación en Login System |
+|-----------|---------------------------|
+| **SRP** | `PlayerLoginController` solo coordina, `CredentialValidator` solo valida, `PlayerRepository` solo almacena |
+| **OCP** | `IPlayerLoginApi` permite agregar `HttpPlayerLoginApi` sin modificar código existente |
+| **LSP** | `DummyPlayerLoginApi` es intercambiable con futuras implementaciones |
+| **ISP** | Interfaces pequeñas: `IPlayerRepository`, `ICredentialValidator`, `ILoginAttemptTracker` |
+| **DIP** | Controllers dependen de interfaces (`IPlayerLoginApi`, `ICredentialValidator`), no de implementaciones |
+
+### Patrones de Diseño Aplicados
+
+| Patrón | Uso en Login System |
+|--------|---------------------|
+| **MVP** | `PlayerLoginWindow` (View) + `PlayerLoginPresenter` (Presenter) + Servicios (Model) |
+| **Repository** | `IPlayerRepository` / `PlayerRepository` para gestión de jugadores |
+| **Strategy** | `ICredentialValidator` permite diferentes estrategias de validación |
+| **State** | `PlayerLoginState` enum para estados de la UI |
+| **Factory** | `ApiProvider.ProvidePlayerLoginApi()` para crear instancias de API |
+| **Adapter** | `PlayerLoginIntegration` adapta el login al sistema existente |
+| **Facade** | `AdminService` simplifica operaciones administrativas |
+
+### Configuración del Sistema
+
+```csharp
+public static class PlayerLoginSettings
+{
+    public const int MaxLoginAttempts = 3;        // Intentos antes de bloqueo
+    public const string DefaultPassword = "1234"; // Contraseña por defecto
+    public const string AdminPlayerName = "Admin"; // Usuario administrador
+    public const int MinPlayerNameLength = 3;     // Longitud mínima nombre
+    public const int MaxPlayerNameLength = 20;    // Longitud máxima nombre
+}
+```
+
+### Servicios Registrados en ServiceLocator
+
+| Servicio | Interface | Implementación |
+|----------|-----------|----------------|
+| Repositorio de Jugadores | `IPlayerRepository` | `PlayerRepository` |
+| Validador de Credenciales | `ICredentialValidator` | `CredentialValidator` |
+| Tracker de Intentos | `ILoginAttemptTracker` | `LoginAttemptTracker` |
+| Servicio Admin | `IAdminService` | `AdminService` |
+
+### Configuración en Unity
+
+#### Prefab PlayerLoginWindow
+El prefab reutiliza el diseño visual de `CharacterNameWindow`:
+- Componente `PlayerLoginWindow` (Script)
+- Componente `CanvasGroup` (alpha = 0 inicial)
+- Componente `UIFadeAnimation` (para transiciones)
+- Ubicación: `Resources/UI/PlayerLoginWindow.prefab`
+
+#### GameObject "Player Login System"
+```
+Player Login System (GameObject)
+├── PlayerLoginController (Component)
+│   ├── Login Window: (auto-creado desde Resources)
+│   └── Show On Start: ✓
+│
+└── PlayerLoginIntegration (Component)
+    ├── Login Controller: → Player Login System
+    ├── Character View Controller: → Character View Controller
+    ├── Character Selection Scene: "CharacterSelection"
+    ├── Use Scene Transition: ☐
+    └── Admin Panel: → Admin Panel
+```
+
+#### GameObject "Character View Controller"
+- **Show On Start**: ☐ (desactivado para esperar login)
+
+### Uso del Sistema
+
+#### Flujo Normal
+1. Usuario inicia el juego → aparece ventana de login
+2. Ingresa nombre → sistema verifica si existe
+3. Si existe → pide contraseña → valida → entra a selección de personajes
+4. Si no existe → registra con contraseña "1234" → crea personaje
+
+#### Sistema de Bloqueo
+- 3 intentos fallidos consecutivos = jugador bloqueado
+- Solo el usuario "Admin" puede desbloquear
+- Presionar **F12** abre el panel de administración
+
+#### Usuario Administrador
+- Nombre: "Admin" (configurable en `PlayerLoginSettings`)
+- Puede ver lista de jugadores bloqueados
+- Puede desbloquear jugadores individualmente o todos
+
+---
+
 ## 📈 MÉTRICAS FINALES
 
 | Métrica | Antes | Después |
 |---------|-------|---------|
-| Archivos en `Core/` | 0 | 16 |
-| Interfaces creadas | ~5 | ~13 |
+| Archivos en `Core/` | 0 | 21 |
+| Interfaces creadas | ~5 | ~18 |
 | Uso de `FindObjectOfType` | ~15 lugares | ~4 lugares (con fallback) |
 | Uso directo de `PlayerPrefs` | ~5 lugares | 0 (todo usa ISaveService con fallback) |
-| Patrones implementados | 1 (State) | 8+ |
+| Patrones implementados | 1 (State) | 10+ |
 | Principios SOLID aplicados | Parcial | Todos |
 
 ---
