@@ -128,17 +128,54 @@ namespace Scripts.Services.CharacterProviderApi
             var statusCode = (long)StatusCodes.Ok;
             var json = string.Empty;
 
-            if (characters.Remove(characterid))
+            // Intentar eliminar de memoria primero
+            bool removed = characters.Remove(characterid);
+            
+            // Si no estaba en memoria, intentar eliminar directamente del archivo
+            if (!removed)
             {
+                var existingJson = LoadCharactersJson();
+                if (!string.IsNullOrEmpty(existingJson))
+                {
+                    var existingCollection = JsonUtility.FromJson<CharacterDataCollection>(existingJson);
+                    if (existingCollection?.items != null)
+                    {
+                        var updatedList = existingCollection.items.Where(c => c.id != characterid).ToArray();
+                        if (updatedList.Length < existingCollection.items.Length)
+                        {
+                            removed = true;
+                            // Guardar directamente sin pasar por SaveCharacterCollection
+                            var updatedCollection = new CharacterDataCollection(updatedList);
+                            var updatedJson = updatedCollection.ToString();
+                            if (saveService != null)
+                            {
+                                saveService.SetString(StorageKey, updatedJson);
+                                saveService.Save();
+                            }
+                            else
+                            {
+                                PlayerPrefs.DeleteKey(StorageKey);
+                                PlayerPrefs.SetString(StorageKey, updatedJson);
+                                PlayerPrefs.Save();
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Si se eliminó de memoria, guardar normalmente (merge)
                 SaveCharacterCollection();
+            }
 
+            if (removed)
+            {
                 DeleteCharacterCallback?.Invoke(statusCode, json);
             }
             else
             {
                 statusCode = (long)StatusCodes.BadRequest;
                 json = "The character was not found.";
-
                 DeleteCharacterCallback?.Invoke(statusCode, json);
             }
         }
@@ -195,9 +232,33 @@ namespace Scripts.Services.CharacterProviderApi
 
         private void SaveCharacterCollection()
         {
-            var characterCollection = GetCharacterCollection();
-            var characterDataCollection = new CharacterDataCollection(characterCollection);
-            var json = characterDataCollection.ToString();
+            // IMPORTANTE: Mezclar los personajes en memoria con los existentes en el archivo
+            // para no perder personajes de otros usuarios al guardar
+            var existingJson = LoadCharactersJson();
+            var existingCharacters = new Dictionary<int, CharacterData>();
+            
+            // Cargar personajes existentes del archivo
+            if (!string.IsNullOrEmpty(existingJson))
+            {
+                var existingCollection = JsonUtility.FromJson<CharacterDataCollection>(existingJson);
+                if (existingCollection?.items != null)
+                {
+                    foreach (var character in existingCollection.items)
+                    {
+                        existingCharacters[character.id] = character;
+                    }
+                }
+            }
+            
+            // Actualizar/agregar los personajes en memoria (sobrescribe los existentes con mismo ID)
+            foreach (var kvp in characters)
+            {
+                existingCharacters[kvp.Key] = kvp.Value;
+            }
+            
+            // Guardar la colección combinada
+            var mergedCollection = new CharacterDataCollection(existingCharacters.Values.ToArray());
+            var json = mergedCollection.ToString();
 
             // Usar ISaveService si está disponible
             if (saveService != null)
