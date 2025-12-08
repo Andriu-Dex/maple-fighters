@@ -172,7 +172,7 @@ namespace Scripts.Services.PlayerLoginApi
                     if (remainingAttempts <= 0)
                     {
                         loginResult = LoginResult.Blocked;
-                        message = "Cuenta bloqueada por demasiados intentos fallidos";
+                        message = "⚠️ Cuenta bloqueada por demasiados intentos fallidos.\nContacta al usuario 'Admin' para desbloquearla.";
                     }
                     else
                     {
@@ -453,7 +453,7 @@ namespace Scripts.Services.PlayerLoginApi
                     if (remainingAttempts <= 0)
                     {
                         loginResult = LoginResult.Blocked;
-                        message = "Jugador bloqueado por demasiados intentos fallidos";
+                        message = "⚠️ Jugador bloqueado por demasiados intentos fallidos.\nContacta al usuario 'Admin' para desbloquearla.";
                     }
                     else
                     {

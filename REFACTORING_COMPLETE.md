@@ -696,7 +696,7 @@ Implementar un sistema de autenticación simplificado basado en nombre de jugado
 | `IPlayerRepository.cs` | Contrato para almacenamiento de jugadores | DIP, ISP |
 | `ICredentialValidator.cs` | Contrato para validación de credenciales | SRP, DIP |
 | `ILoginAttemptTracker.cs` | Contrato para tracking de intentos | SRP, ISP |
-| `IAdminService.cs` | Contrato para operaciones administrativas | ISP |
+| `IAdminService.cs` | Contrato para operaciones administrativas (IsAdmin, IsAdminByEmail, Unblock) | ISP |
 
 #### Capa de Infraestructura (Implementaciones)
 
@@ -705,7 +705,7 @@ Implementar un sistema de autenticación simplificado basado en nombre de jugado
 | `PlayerRepository.cs` | Almacena jugadores usando `ISaveService` | Repository |
 | `CredentialValidator.cs` | Valida nombre y contraseña | Strategy |
 | `LoginAttemptTracker.cs` | Gestiona intentos fallidos y bloqueos | - |
-| `AdminService.cs` | Operaciones de administrador | Facade |
+| `AdminService.cs` | Operaciones de administrador (detección por nombre y email) | Facade |
 
 #### Capa de Servicios (API)
 
@@ -726,7 +726,7 @@ Implementar un sistema de autenticación simplificado basado en nombre de jugado
 | `PlayerLoginPresenter.cs` | Lógica de presentación | MVP |
 | `PlayerLoginController.cs` | Coordinador del flujo | Controller |
 | `PlayerLoginIntegration.cs` | Integración con sistema existente | Adapter |
-| `AdminPanel.cs` | Panel OnGUI para administrador | - |
+| `AdminPanel.cs` | Panel OnGUI para administrador (Singleton, DontDestroyOnLoad) | Singleton |
 
 ### Archivos Modificados
 
@@ -818,13 +818,15 @@ Player Login System (GameObject)
 
 #### Sistema de Bloqueo
 - 3 intentos fallidos consecutivos = jugador bloqueado
-- Solo el usuario "Admin" puede desbloquear
+- Solo el usuario administrador puede desbloquear
 - Presionar **F12** abre el panel de administración
 
 #### Usuario Administrador
-- Nombre: "Admin" (configurable en `PlayerLoginSettings`)
+- Detección por nombre: "Admin" (configurable en `PlayerLoginSettings`)
+- Detección por email: `admin@gmail.com`, `admin@test.com`, `admin@admin.com`
 - Puede ver lista de jugadores bloqueados
 - Puede desbloquear jugadores individualmente o todos
+- Panel persiste entre escenas usando `DontDestroyOnLoad`
 
 ---
 

@@ -38,6 +38,30 @@ namespace Scripts.Core.Infrastructure.Services
             return playerName.Equals(AdminPlayerName, System.StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Verifica si el email corresponde al administrador.
+        /// </summary>
+        /// <param name="email">Email a verificar.</param>
+        /// <returns>True si es el email del administrador.</returns>
+        public bool IsAdminByEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return false;
+            }
+
+            // Lista de emails de administrador permitidos
+            var adminEmails = new[] { "admin@gmail.com", "admin@test.com", "admin@admin.com" };
+            foreach (var adminEmail in adminEmails)
+            {
+                if (email.Equals(adminEmail, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <inheritdoc/>
         public bool UnblockAllPlayers(string adminPlayerName)
         {

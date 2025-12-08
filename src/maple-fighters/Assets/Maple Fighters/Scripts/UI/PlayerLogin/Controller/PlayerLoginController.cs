@@ -21,6 +21,11 @@ namespace Scripts.UI.PlayerLogin
         [SerializeField]
         private PlayerLoginWindow loginWindow;
 
+        [Header("Admin Panel Reference (Opcional)")]
+        [Tooltip("Si no se asigna, se busca automáticamente en la escena")]
+        [SerializeField]
+        private AdminPanel adminPanel;
+
         [Header("Settings")]
         [SerializeField]
         private bool showOnStart = true;
@@ -33,6 +38,7 @@ namespace Scripts.UI.PlayerLogin
         private IPlayerLoginApi cachedLoginApi;
         private ICredentialValidator cachedValidator;
         private ISessionManager sessionManager;
+        private IAdminService adminService;
         private bool servicesInitialized;
         private bool windowCreatedDynamically;
 
@@ -48,6 +54,11 @@ namespace Scripts.UI.PlayerLogin
         /// Se dispara cuando el usuario quiere volver (salir del login).
         /// </summary>
         public event Action OnBackToMenu;
+
+        /// <summary>
+        /// Se dispara cuando un usuario Admin quiere abrir el panel de administración.
+        /// </summary>
+        public event Action OnAdminPanelRequested;
 
         #endregion
 
@@ -77,6 +88,11 @@ namespace Scripts.UI.PlayerLogin
         /// Indica si hay una sesión activa.
         /// </summary>
         public bool HasSession => sessionManager?.HasValidSession ?? false;
+
+        /// <summary>
+        /// Indica si el usuario actual es administrador.
+        /// </summary>
+        public bool IsCurrentUserAdmin => adminService != null && adminService.IsAdmin(CurrentPlayerName);
 
         #endregion
 
@@ -137,6 +153,7 @@ namespace Scripts.UI.PlayerLogin
             cachedLoginApi = ApiProvider.ProvidePlayerLoginApi();
             ServiceLocator.TryGet(out cachedValidator);
             ServiceLocator.TryGet(out sessionManager);
+            ServiceLocator.TryGet(out adminService);
 
             if (cachedLoginApi == null)
             {
@@ -151,6 +168,16 @@ namespace Scripts.UI.PlayerLogin
             if (sessionManager == null)
             {
                 Debug.LogWarning("[PlayerLoginController] No se pudo obtener ISessionManager");
+            }
+
+            // Buscar AdminPanel si no está asignado
+            if (adminPanel == null)
+            {
+                adminPanel = AdminPanel.Instance;
+                if (adminPanel == null)
+                {
+                    adminPanel = FindObjectOfType<AdminPanel>();
+                }
             }
 
             servicesInitialized = true;
@@ -288,6 +315,29 @@ namespace Scripts.UI.PlayerLogin
             ShowLogin();
         }
 
+        /// <summary>
+        /// Muestra el panel de administración (solo para Admin).
+        /// </summary>
+        public void ShowAdminPanel()
+        {
+            if (!IsCurrentUserAdmin)
+            {
+                Debug.LogWarning("[PlayerLoginController] Solo el usuario Admin puede acceder al panel de administración");
+                return;
+            }
+
+            if (adminPanel != null)
+            {
+                adminPanel.SetCurrentPlayer(CurrentPlayerName);
+                adminPanel.Show();
+                OnAdminPanelRequested?.Invoke();
+            }
+            else
+            {
+                Debug.LogWarning("[PlayerLoginController] AdminPanel no encontrado en la escena");
+            }
+        }
+
         #endregion
 
         #region Event Handlers
@@ -305,6 +355,18 @@ namespace Scripts.UI.PlayerLogin
 
             // Guardar nombre del jugador actual para compatibilidad legacy
             SaveCurrentPlayerLegacy(playerName);
+
+            // Notificar al AdminPanel del usuario actual (nombre y email)
+            if (adminPanel != null)
+            {
+                adminPanel.SetCurrentPlayer(playerName, email);
+            }
+
+            // Log si el usuario es Admin (verificar por nombre o email)
+            if (IsCurrentUserAdmin || (adminService != null && adminService.IsAdminByEmail(email)))
+            {
+                Debug.Log($"[PlayerLoginController] Usuario Admin detectado ({email}). Presiona F12 para abrir el panel de administración.");
+            }
 
             HideLogin();
             OnLoginSuccess?.Invoke(email, playerName, playerData);

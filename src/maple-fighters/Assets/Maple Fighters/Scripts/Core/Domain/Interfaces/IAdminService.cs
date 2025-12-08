@@ -50,5 +50,12 @@ namespace Scripts.Core.Domain.Interfaces
         /// </summary>
         /// <returns>Cantidad de jugadores bloqueados.</returns>
         int GetBlockedPlayersCount();
+
+        /// <summary>
+        /// Verifica si un email corresponde al administrador.
+        /// </summary>
+        /// <param name="email">Email a verificar.</param>
+        /// <returns>True si es email de administrador.</returns>
+        bool IsAdminByEmail(string email);
     }
 }

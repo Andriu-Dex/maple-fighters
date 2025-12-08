@@ -206,8 +206,9 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case PlayerLoginState.Blocked:
-                    view.StatusMessage = "Cuenta bloqueada. Contacta al administrador.";
+                    view.StatusMessage = "⚠️ Cuenta bloqueada por seguridad.\nContacta al usuario 'Admin' para desbloquearla.";
                     view.DisableConfirmButton();
+                    // El botón Back debe seguir habilitado para poder volver e intentar con otra cuenta
                     break;
 
                 case PlayerLoginState.Error:
