@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UI;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,39 +7,37 @@ using UnityEngine.UI;
 namespace Scripts.UI.PlayerLogin
 {
     /// <summary>
-    /// Ventana de login de jugadores.
-    /// Reutiliza el diseño visual de CharacterNameWindow con lógica propia.
-    /// 
-    /// Para usar: duplicar el prefab de CharacterNameWindow en Unity,
-    /// reemplazar el script por este, y agregar el Text para título y mensaje.
+    /// Ventana de login de jugadores v2.
+    /// Soporta flujo basado en email con selección de personaje integrada.
     /// </summary>
     [RequireComponent(typeof(UIFadeAnimation))]
     public class PlayerLoginWindow : UIElement, IPlayerLoginView
     {
         #region Events
-        /// <inheritdoc/>
+
         public event Action<string> ConfirmButtonClicked;
-
-        /// <inheritdoc/>
         public event Action BackButtonClicked;
-
-        /// <inheritdoc/>
         public event Action<string> InputFieldChanged;
+        public event Action<string> CharacterClassSelected;
+        public event Action<string, string> RegistrationConfirmed;
+
         #endregion
 
-        #region Serialized Fields
-        [Header("Input")]
+        #region Serialized Fields - Main Login Panel
+
+        [Header("=== Main Login Panel ===")]
+        [SerializeField]
+        private GameObject loginPanel;
+
         [SerializeField]
         private InputField inputField;
 
-        [Header("Buttons")]
         [SerializeField]
         private Button confirmButton;
 
         [SerializeField]
         private Button backButton;
 
-        [Header("Text Elements")]
         [SerializeField]
         private Text titleText;
 
@@ -47,10 +46,73 @@ namespace Scripts.UI.PlayerLogin
 
         [SerializeField]
         private Text placeholderText;
+
+        #endregion
+
+        #region Serialized Fields - Character Selection Panel
+
+        [Header("=== Character Selection Panel ===")]
+        [SerializeField]
+        private GameObject characterSelectionPanel;
+
+        [SerializeField]
+        private Button knightButton;
+
+        [SerializeField]
+        private Button archerButton;
+
+        [SerializeField]
+        private Button wizardButton;
+
+        [SerializeField]
+        private Image knightHighlight;
+
+        [SerializeField]
+        private Image archerHighlight;
+
+        [SerializeField]
+        private Image wizardHighlight;
+
+        [SerializeField]
+        private Button confirmCharacterButton;
+
+        [SerializeField]
+        private TextMeshProUGUI characterSelectionTitle;
+
+        #endregion
+
+        #region Serialized Fields - Registration Panel
+
+        [Header("=== Registration Panel ===")]
+        [SerializeField]
+        private GameObject registrationPanel;
+
+        [SerializeField]
+        private TMP_InputField nameInputField;
+
+        [SerializeField]
+        private TMP_InputField passwordInputField;
+
+        [SerializeField]
+        private Button registerButton;
+
+        [SerializeField]
+        private TextMeshProUGUI registrationTitle;
+
+        [SerializeField]
+        private TextMeshProUGUI registrationStatusText;
+
+        #endregion
+
+        #region Private Fields
+
+        private string currentEmail = string.Empty;
+        private string selectedCharacterClass = string.Empty;
+
         #endregion
 
         #region Properties
-        /// <inheritdoc/>
+
         public string InputText
         {
             get => inputField != null ? inputField.text : string.Empty;
@@ -63,7 +125,6 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        /// <inheritdoc/>
         public string Title
         {
             set
@@ -75,7 +136,6 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        /// <inheritdoc/>
         public string Placeholder
         {
             set
@@ -87,7 +147,6 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        /// <inheritdoc/>
         public string StatusMessage
         {
             set
@@ -99,12 +158,25 @@ namespace Scripts.UI.PlayerLogin
                 }
             }
         }
+
+        public string CurrentEmail
+        {
+            get => currentEmail;
+            set => currentEmail = value;
+        }
+
+        public string SelectedCharacterClass
+        {
+            get => selectedCharacterClass;
+            set => selectedCharacterClass = value;
+        }
+
         #endregion
 
         #region Unity Lifecycle
+
         private void Awake()
         {
-            // Inicialmente oculto (alpha = 0)
             var canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup != null)
             {
@@ -112,25 +184,50 @@ namespace Scripts.UI.PlayerLogin
                 canvasGroup.blocksRaycasts = false;
                 canvasGroup.interactable = false;
             }
+
+            // Inicialmente ocultar paneles secundarios
+            HideCharacterSelectionPanel();
+            HideRegistrationPanel();
         }
 
         private void Start()
         {
+            // Main panel events
             confirmButton?.onClick.AddListener(OnConfirmButtonClicked);
             backButton?.onClick.AddListener(OnBackButtonClicked);
             inputField?.onValueChanged.AddListener(OnInputFieldChanged);
+
+            // Character selection events
+            knightButton?.onClick.AddListener(() => OnCharacterSelected("Knight"));
+            archerButton?.onClick.AddListener(() => OnCharacterSelected("Archer"));
+            wizardButton?.onClick.AddListener(() => OnCharacterSelected("Wizard"));
+            confirmCharacterButton?.onClick.AddListener(OnConfirmCharacterClicked);
+
+            // Registration panel events
+            registerButton?.onClick.AddListener(OnRegisterButtonClicked);
         }
 
         private void OnDestroy()
         {
-            confirmButton?.onClick.RemoveListener(OnConfirmButtonClicked);
-            backButton?.onClick.RemoveListener(OnBackButtonClicked);
-            inputField?.onValueChanged.RemoveListener(OnInputFieldChanged);
+            // Cleanup main panel
+            confirmButton?.onClick.RemoveAllListeners();
+            backButton?.onClick.RemoveAllListeners();
+            inputField?.onValueChanged.RemoveAllListeners();
+
+            // Cleanup character selection
+            knightButton?.onClick.RemoveAllListeners();
+            archerButton?.onClick.RemoveAllListeners();
+            wizardButton?.onClick.RemoveAllListeners();
+            confirmCharacterButton?.onClick.RemoveAllListeners();
+
+            // Cleanup registration
+            registerButton?.onClick.RemoveAllListeners();
         }
+
         #endregion
 
-        #region IPlayerLoginView Implementation
-        /// <inheritdoc/>
+        #region Button Control
+
         public void EnableConfirmButton()
         {
             if (confirmButton != null)
@@ -139,7 +236,6 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        /// <inheritdoc/>
         public void DisableConfirmButton()
         {
             if (confirmButton != null)
@@ -148,49 +244,35 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        /// <inheritdoc/>
         public void EnableInteraction()
         {
-            if (inputField != null)
-            {
-                inputField.interactable = true;
-            }
+            if (inputField != null) inputField.interactable = true;
             EnableConfirmButton();
-            if (backButton != null)
-            {
-                backButton.interactable = true;
-            }
+            if (backButton != null) backButton.interactable = true;
         }
 
-        /// <inheritdoc/>
         public void DisableInteraction()
         {
-            if (inputField != null)
-            {
-                inputField.interactable = false;
-            }
+            if (inputField != null) inputField.interactable = false;
             DisableConfirmButton();
-            if (backButton != null)
-            {
-                backButton.interactable = false;
-            }
+            if (backButton != null) backButton.interactable = false;
         }
 
-        /// <inheritdoc/>
+        #endregion
+
+        #region Input Configuration
+
         public void SetPasswordMode(bool isPassword)
         {
             if (inputField != null)
             {
-                inputField.contentType = isPassword 
-                    ? InputField.ContentType.Password 
+                inputField.contentType = isPassword
+                    ? InputField.ContentType.Password
                     : InputField.ContentType.Standard;
-                
-                // Forzar actualización del input field
                 inputField.ForceLabelUpdate();
             }
         }
 
-        /// <inheritdoc/>
         public void ClearInput()
         {
             if (inputField != null)
@@ -199,7 +281,6 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        /// <inheritdoc/>
         public void FocusInput()
         {
             if (inputField != null)
@@ -208,9 +289,138 @@ namespace Scripts.UI.PlayerLogin
                 inputField.ActivateInputField();
             }
         }
+
+        #endregion
+
+        #region Character Selection Panel
+
+        public void ShowCharacterSelectionPanel()
+        {
+            if (characterSelectionPanel != null)
+            {
+                characterSelectionPanel.SetActive(true);
+            }
+            
+            // Reset selection
+            selectedCharacterClass = string.Empty;
+            ClearCharacterHighlights();
+
+            if (confirmCharacterButton != null)
+            {
+                confirmCharacterButton.interactable = false;
+            }
+
+            if (characterSelectionTitle != null)
+            {
+                characterSelectionTitle.text = $"Selecciona tu personaje\n({currentEmail})";
+            }
+        }
+
+        public void HideCharacterSelectionPanel()
+        {
+            if (characterSelectionPanel != null)
+            {
+                characterSelectionPanel.SetActive(false);
+            }
+        }
+
+        public void HighlightSelectedCharacter(string characterClass)
+        {
+            ClearCharacterHighlights();
+
+            switch (characterClass)
+            {
+                case "Knight":
+                    if (knightHighlight != null) knightHighlight.enabled = true;
+                    break;
+                case "Archer":
+                    if (archerHighlight != null) archerHighlight.enabled = true;
+                    break;
+                case "Wizard":
+                    if (wizardHighlight != null) wizardHighlight.enabled = true;
+                    break;
+            }
+        }
+
+        private void ClearCharacterHighlights()
+        {
+            if (knightHighlight != null) knightHighlight.enabled = false;
+            if (archerHighlight != null) archerHighlight.enabled = false;
+            if (wizardHighlight != null) wizardHighlight.enabled = false;
+        }
+
+        #endregion
+
+        #region Registration Panel
+
+        public void ShowRegistrationPanel()
+        {
+            if (registrationPanel != null)
+            {
+                registrationPanel.SetActive(true);
+            }
+
+            ClearRegistrationFields();
+
+            if (registrationTitle != null)
+            {
+                registrationTitle.text = $"Completa tu registro\n({selectedCharacterClass})";
+            }
+
+            if (registrationStatusText != null)
+            {
+                registrationStatusText.text = string.Empty;
+            }
+        }
+
+        public void HideRegistrationPanel()
+        {
+            if (registrationPanel != null)
+            {
+                registrationPanel.SetActive(false);
+            }
+        }
+
+        public string GetRegistrationName()
+        {
+            return nameInputField != null ? nameInputField.text : string.Empty;
+        }
+
+        public string GetRegistrationPassword()
+        {
+            return passwordInputField != null ? passwordInputField.text : string.Empty;
+        }
+
+        public void ClearRegistrationFields()
+        {
+            if (nameInputField != null) nameInputField.text = string.Empty;
+            if (passwordInputField != null) passwordInputField.text = string.Empty;
+        }
+
+        #endregion
+
+        #region Panel Visibility
+
+        public void ShowLoginPanel()
+        {
+            if (loginPanel != null)
+            {
+                loginPanel.SetActive(true);
+            }
+        }
+
+        public void HideLoginPanel()
+        {
+            if (loginPanel != null)
+            {
+                loginPanel.SetActive(false);
+            }
+        }
+
         #endregion
 
         #region Event Handlers
+
         private void OnConfirmButtonClicked()
         {
             var text = inputField != null ? inputField.text : string.Empty;
@@ -226,6 +436,38 @@ namespace Scripts.UI.PlayerLogin
         {
             InputFieldChanged?.Invoke(text);
         }
+
+        private void OnCharacterSelected(string characterClass)
+        {
+            selectedCharacterClass = characterClass;
+            HighlightSelectedCharacter(characterClass);
+            
+            if (confirmCharacterButton != null)
+            {
+                confirmCharacterButton.interactable = true;
+            }
+
+            CharacterClassSelected?.Invoke(characterClass);
+        }
+
+        private void OnConfirmCharacterClicked()
+        {
+            if (!string.IsNullOrEmpty(selectedCharacterClass))
+            {
+                // Trigger transition to registration panel
+                HideCharacterSelectionPanel();
+                ShowRegistrationPanel();
+            }
+        }
+
+        private void OnRegisterButtonClicked()
+        {
+            var name = GetRegistrationName();
+            var password = GetRegistrationPassword();
+            
+            RegistrationConfirmed?.Invoke(name, password);
+        }
+
         #endregion
     }
 }

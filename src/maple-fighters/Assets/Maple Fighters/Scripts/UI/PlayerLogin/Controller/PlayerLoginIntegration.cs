@@ -9,14 +9,18 @@ using UnityEngine.SceneManagement;
 namespace Scripts.UI.PlayerLogin
 {
     /// <summary>
-    /// Integrador del sistema de login de jugadores con el flujo del juego.
-    /// Este componente conecta PlayerLoginController con CharacterViewController
-    /// y el resto del sistema de UI del juego.
+    /// Integrador del sistema de login de jugadores v2 con el flujo del juego.
+    /// En v2, la selección de personaje para nuevos usuarios ocurre dentro
+    /// del flujo de login, por lo que este componente principalmente maneja
+    /// la transición al juego después del login exitoso.
+    /// 
+    /// Flujo v2:
+    ///   - Usuario nuevo: Email -> Selección clase -> Nombre+Password -> Juego
+    ///   - Usuario existente: Email -> Password -> Juego (sin selección de clase)
     /// 
     /// Configuración en Unity:
     ///   1. Agregar a un GameObject en la escena de Login/Menú principal
     ///   2. Asignar las referencias necesarias en el inspector
-    ///   3. El componente manejará automáticamente el flujo de login
     /// </summary>
     public class PlayerLoginIntegration : MonoBehaviour
     {
@@ -28,8 +32,9 @@ namespace Scripts.UI.PlayerLogin
         private CharacterViewController characterViewController;
 
         [Header("Scene Settings")]
+        [Tooltip("Escena a cargar después del login exitoso (si useSceneTransition=true)")]
         [SerializeField]
-        private string characterSelectionScene = "CharacterSelection";
+        private string gameScene = "Game";
 
         [SerializeField]
         private bool useSceneTransition = false;
@@ -43,23 +48,17 @@ namespace Scripts.UI.PlayerLogin
 
         private void Awake()
         {
-            // Obtener servicios
             ServiceLocator.TryGet(out playerRepository);
             ServiceLocator.TryGet(out saveService);
         }
 
         private void Start()
         {
-            // Suscribirse a eventos del controlador de login
             if (loginController != null)
             {
                 loginController.OnLoginSuccess += OnLoginSuccess;
-                loginController.OnNewPlayerCreation += OnNewPlayerCreation;
                 loginController.OnBackToMenu += OnBackToMenu;
             }
-
-            // Verificar si hay un jugador guardado
-            CheckForSavedPlayer();
         }
 
         private void OnDestroy()
@@ -67,74 +66,45 @@ namespace Scripts.UI.PlayerLogin
             if (loginController != null)
             {
                 loginController.OnLoginSuccess -= OnLoginSuccess;
-                loginController.OnNewPlayerCreation -= OnNewPlayerCreation;
                 loginController.OnBackToMenu -= OnBackToMenu;
             }
         }
 
-        private void CheckForSavedPlayer()
+        private void OnLoginSuccess(string email, string playerName, IPlayerCredentials playerData)
         {
-            if (saveService == null) return;
+            Debug.Log($"[PlayerLoginIntegration] Login v2 exitoso: {email} -> {playerName} (Clase: {playerData?.CharacterClass})");
 
-            var savedPlayer = saveService.GetString("current_player", string.Empty);
-            
-            if (!string.IsNullOrEmpty(savedPlayer) && playerRepository != null)
-            {
-                // Verificar si el jugador guardado existe y no está bloqueado
-                var player = playerRepository.GetPlayer(savedPlayer);
-                if (player != null && !player.IsBlocked)
-                {
-                    Debug.Log($"[PlayerLoginIntegration] Jugador guardado encontrado: {savedPlayer}");
-                    // Opcionalmente, auto-login o mostrar mensaje de bienvenida
-                }
-            }
-        }
+            // Configurar UserMetadata con datos completos
+            SetupUserMetadata(email, playerName, playerData);
 
-        private void OnLoginSuccess(string playerName)
-        {
-            Debug.Log($"[PlayerLoginIntegration] Login exitoso: {playerName}");
-
-            // Configurar UserMetadata
-            SetupUserMetadata(playerName);
-
-            // Configurar panel de admin si el usuario es Admin
+            // Configurar panel de admin si corresponde
             SetupAdminPanel(playerName);
 
-            // Ir a selección de personajes
-            ShowCharacterSelection();
-        }
-
-        private void OnNewPlayerCreation(string playerName)
-        {
-            Debug.Log($"[PlayerLoginIntegration] Nuevo jugador, creando personaje: {playerName}");
-
-            // Configurar UserMetadata
-            SetupUserMetadata(playerName);
-
-            // Ir a creación de personaje
-            ShowCharacterCreation(playerName);
+            // Ir al juego (en v2 ya se seleccionó el personaje durante el login)
+            StartGame();
         }
 
         private void OnBackToMenu()
         {
             Debug.Log("[PlayerLoginIntegration] Volviendo al menú");
-            // Implementar según necesidad (mostrar menú principal, etc.)
+            // Implementar según necesidad
         }
 
-        private void SetupUserMetadata(string playerName)
+        private void SetupUserMetadata(string email, string playerName, IPlayerCredentials playerData)
         {
             var userMetadata = FindObjectOfType<UserMetadata>();
             if (userMetadata != null)
             {
                 userMetadata.IsLoggedIn = true;
                 
-                // Crear UserData con el ID del jugador
-                userMetadata.UserData = new Scripts.Services.AuthenticatorApi.UserData
-                {
-                    id = playerName.ToLowerInvariant() // Usar nombre como ID
-                };
+                userMetadata.UserData = Scripts.Services.AuthenticatorApi.UserData.Create(
+                    playerData?.Id ?? email.ToLowerInvariant(),
+                    email,
+                    playerName,
+                    playerData?.CharacterClass
+                );
 
-                Debug.Log($"[PlayerLoginIntegration] UserMetadata configurado: {playerName}");
+                Debug.Log($"[PlayerLoginIntegration] UserMetadata configurado: {playerName} ({email})");
             }
             else
             {
@@ -150,51 +120,27 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        private void ShowCharacterSelection()
+        private void StartGame()
         {
             if (useSceneTransition)
             {
-                // Cargar escena de selección de personajes
-                SceneManager.LoadScene(characterSelectionScene);
+                // Cargar escena del juego
+                SceneManager.LoadScene(gameScene);
             }
             else
             {
-                // Mostrar CharacterViewController si está en la misma escena
+                // Activar CharacterViewController si está en la misma escena
+                // En v2, el personaje ya fue seleccionado durante el login
                 if (characterViewController != null)
                 {
                     characterViewController.gameObject.SetActive(true);
                     characterViewController.ShowCharacterSelection();
-                }
-            }
-        }
-
-        private void ShowCharacterCreation(string playerName)
-        {
-            // Similar a ShowCharacterSelection, pero indicando que es nuevo
-            if (useSceneTransition)
-            {
-                // Guardar flag de nuevo jugador para la siguiente escena
-                if (saveService != null)
-                {
-                    saveService.SetBool("is_new_player", true);
-                    saveService.Save();
-                }
-                SceneManager.LoadScene(characterSelectionScene);
-            }
-            else
-            {
-                if (characterViewController != null)
-                {
-                    characterViewController.gameObject.SetActive(true);
-                    characterViewController.ShowCharacterSelection();
-                    // El CharacterViewController debería detectar que es nuevo y mostrar creación
                 }
             }
         }
 
         /// <summary>
         /// Muestra la ventana de login manualmente.
-        /// Útil para llamar desde botones de UI o otros scripts.
         /// </summary>
         public void ShowLogin()
         {
@@ -202,16 +148,18 @@ namespace Scripts.UI.PlayerLogin
         }
 
         /// <summary>
-        /// Cierra sesión del jugador actual.
+        /// Fuerza mostrar login sin auto-login.
+        /// </summary>
+        public void ShowLoginForced()
+        {
+            loginController?.ShowLoginForced();
+        }
+
+        /// <summary>
+        /// Cierra sesión del jugador actual y muestra login.
         /// </summary>
         public void Logout()
         {
-            if (saveService != null)
-            {
-                saveService.SetString("current_player", string.Empty);
-                saveService.Save();
-            }
-
             var userMetadata = FindObjectOfType<UserMetadata>();
             if (userMetadata != null)
             {
@@ -219,10 +167,24 @@ namespace Scripts.UI.PlayerLogin
                 userMetadata.UserData = null;
             }
 
-            // Mostrar login de nuevo
-            ShowLogin();
+            loginController?.Logout();
 
             Debug.Log("[PlayerLoginIntegration] Sesión cerrada");
         }
+
+        /// <summary>
+        /// Email del jugador actual (después del login).
+        /// </summary>
+        public string CurrentEmail => loginController?.CurrentEmail;
+
+        /// <summary>
+        /// Nombre del jugador actual (después del login).
+        /// </summary>
+        public string CurrentPlayerName => loginController?.CurrentPlayerName;
+
+        /// <summary>
+        /// Datos completos del jugador actual.
+        /// </summary>
+        public IPlayerCredentials CurrentPlayerData => loginController?.CurrentPlayerData;
     }
 }

@@ -9,10 +9,10 @@ using UnityEngine;
 namespace Scripts.UI.PlayerLogin
 {
     /// <summary>
-    /// Controlador principal del flujo de login de jugadores.
+    /// Controlador principal del flujo de login de jugadores v2.
     /// Coordina la vista, el presenter y los servicios del juego.
-    /// Usa lazy initialization para evitar problemas de orden de ejecución.
-    /// Si no se asigna LoginWindow, se crea automáticamente desde Resources.
+    /// Soporta el flujo de email con selección de personaje integrada.
+    /// Usa SessionManager para persistencia de sesión.
     /// </summary>
     public class PlayerLoginController : MonoBehaviour
     {
@@ -25,41 +25,76 @@ namespace Scripts.UI.PlayerLogin
         [SerializeField]
         private bool showOnStart = true;
 
+        [SerializeField]
+        private bool enableAutoLogin = true;
+
         private PlayerLoginPresenter presenter;
         private IPlayerLoginApi cachedLoginApi;
         private ICredentialValidator cachedValidator;
+        private ISessionManager sessionManager;
         private bool servicesInitialized;
         private bool windowCreatedDynamically;
 
-        /// <summary>
-        /// Se dispara cuando el login es exitoso y el jugador puede entrar al juego.
-        /// Parámetro: nombre del jugador.
-        /// </summary>
-        public event Action<string> OnLoginSuccess;
+        #region Events
 
         /// <summary>
-        /// Se dispara cuando un nuevo jugador necesita crear su personaje.
-        /// Parámetro: nombre del jugador.
+        /// Se dispara cuando el login es exitoso y el jugador puede entrar al juego.
+        /// Parámetros: (email, nombre del jugador, datos del jugador).
         /// </summary>
-        public event Action<string> OnNewPlayerCreation;
+        public event Action<string, string, IPlayerCredentials> OnLoginSuccess;
 
         /// <summary>
         /// Se dispara cuando el usuario quiere volver (salir del login).
         /// </summary>
         public event Action OnBackToMenu;
 
+        #endregion
+
+        #region Properties
+
+        /// <summary>
+        /// Email del jugador actual (después de login exitoso).
+        /// </summary>
+        public string CurrentEmail { get; private set; }
+
+        /// <summary>
+        /// Nombre del jugador actual (después de login exitoso).
+        /// </summary>
+        public string CurrentPlayerName { get; private set; }
+
+        /// <summary>
+        /// Datos completos del jugador actual.
+        /// </summary>
+        public IPlayerCredentials CurrentPlayerData { get; private set; }
+
+        /// <summary>
+        /// Estado actual del presenter.
+        /// </summary>
+        public PlayerLoginState CurrentState => presenter?.CurrentState ?? PlayerLoginState.EnterEmail;
+
+        /// <summary>
+        /// Indica si hay una sesión activa.
+        /// </summary>
+        public bool HasSession => sessionManager?.HasValidSession ?? false;
+
+        #endregion
+
         private void Start()
         {
-            // Inicializar en Start() para dar tiempo a ServiceLocatorInitializer
             InitializeServices();
             
-            // Crear ventana si no está asignada
             if (loginWindow == null)
             {
                 CreateLoginWindow();
             }
 
             InitializePresenter();
+
+            // Intentar auto-login si está habilitado
+            if (enableAutoLogin && TryAutoLogin())
+            {
+                return; // Auto-login exitoso, no mostrar UI
+            }
 
             if (showOnStart && loginWindow != null)
             {
@@ -71,7 +106,6 @@ namespace Scripts.UI.PlayerLogin
         {
             CleanupPresenter();
             
-            // Destruir ventana si fue creada dinámicamente
             if (windowCreatedDynamically && loginWindow != null)
             {
                 Destroy(loginWindow.gameObject);
@@ -80,7 +114,6 @@ namespace Scripts.UI.PlayerLogin
 
         private void CreateLoginWindow()
         {
-            // Crear usando UICreator (mismo patrón que CharacterViewController)
             loginWindow = UICreator
                 .GetInstance()
                 .Create<PlayerLoginWindow>(UICanvasLayer.Foreground, UIIndex.End);
@@ -100,11 +133,9 @@ namespace Scripts.UI.PlayerLogin
         {
             if (servicesInitialized) return;
 
-            // Obtener API de login
             cachedLoginApi = ApiProvider.ProvidePlayerLoginApi();
-
-            // Obtener validador del ServiceLocator
             ServiceLocator.TryGet(out cachedValidator);
+            ServiceLocator.TryGet(out sessionManager);
 
             if (cachedLoginApi == null)
             {
@@ -113,7 +144,12 @@ namespace Scripts.UI.PlayerLogin
 
             if (cachedValidator == null)
             {
-                Debug.LogWarning("[PlayerLoginController] No se pudo obtener ICredentialValidator. ¿ServiceLocatorInitializer está en la escena?");
+                Debug.LogWarning("[PlayerLoginController] No se pudo obtener ICredentialValidator");
+            }
+
+            if (sessionManager == null)
+            {
+                Debug.LogWarning("[PlayerLoginController] No se pudo obtener ISessionManager");
             }
 
             servicesInitialized = true;
@@ -129,7 +165,6 @@ namespace Scripts.UI.PlayerLogin
 
             presenter = new PlayerLoginPresenter(loginWindow, cachedLoginApi, cachedValidator);
             presenter.LoginSuccessful += OnPresenterLoginSuccessful;
-            presenter.NewPlayerRequested += OnPresenterNewPlayerRequested;
             presenter.BackRequested += OnPresenterBackRequested;
         }
 
@@ -138,12 +173,70 @@ namespace Scripts.UI.PlayerLogin
             if (presenter != null)
             {
                 presenter.LoginSuccessful -= OnPresenterLoginSuccessful;
-                presenter.NewPlayerRequested -= OnPresenterNewPlayerRequested;
                 presenter.BackRequested -= OnPresenterBackRequested;
                 presenter.Dispose();
                 presenter = null;
             }
         }
+
+        #region Auto-Login
+
+        /// <summary>
+        /// Intenta auto-login con sesión guardada usando SessionManager.
+        /// </summary>
+        /// <returns>True si auto-login exitoso.</returns>
+        private bool TryAutoLogin()
+        {
+            if (sessionManager == null)
+            {
+                Debug.Log("[PlayerLoginController] SessionManager no disponible para auto-login");
+                return false;
+            }
+
+            // Intentar cargar sesión guardada
+            if (!sessionManager.LoadSession())
+            {
+                return false;
+            }
+
+            var session = sessionManager.CurrentSession;
+            if (session == null || !session.IsValid())
+            {
+                return false;
+            }
+
+            // Obtener datos del jugador
+            if (!ServiceLocator.TryGet<IPlayerRepository>(out var repository))
+            {
+                return false;
+            }
+
+            var player = repository.GetPlayerByEmail(session.Email);
+            if (player == null || !player.IsRegistrationComplete())
+            {
+                Debug.Log("[PlayerLoginController] Jugador no encontrado o registro incompleto");
+                sessionManager.ClearSession();
+                return false;
+            }
+
+            // Auto-login exitoso
+            Debug.Log($"[PlayerLoginController] Auto-login exitoso: {session.Email}");
+            
+            CurrentEmail = session.Email;
+            CurrentPlayerName = session.PlayerName;
+            CurrentPlayerData = player;
+            
+            // Actualizar última fecha de login y renovar sesión
+            repository.UpdateLastLogin(session.Email);
+            sessionManager.RefreshSession();
+            
+            OnLoginSuccess?.Invoke(session.Email, session.PlayerName, player);
+            return true;
+        }
+
+        #endregion
+
+        #region Public Methods
 
         /// <summary>
         /// Muestra la ventana de login.
@@ -173,28 +266,47 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        private void OnPresenterLoginSuccessful(string playerName)
+        /// <summary>
+        /// Cierra la sesión actual y muestra el login.
+        /// </summary>
+        public void Logout()
         {
-            Debug.Log($"[PlayerLoginController] Login exitoso: {playerName}");
-            
-            // Guardar el nombre del jugador actual (para uso posterior)
-            SaveCurrentPlayer(playerName);
-
-            // Ocultar ventana y notificar
-            HideLogin();
-            OnLoginSuccess?.Invoke(playerName);
+            sessionManager?.ClearSession();
+            CurrentEmail = null;
+            CurrentPlayerName = null;
+            CurrentPlayerData = null;
+            ShowLogin();
         }
 
-        private void OnPresenterNewPlayerRequested(string playerName)
+        /// <summary>
+        /// Fuerza mostrar el login sin intentar auto-login.
+        /// </summary>
+        public void ShowLoginForced()
         {
-            Debug.Log($"[PlayerLoginController] Nuevo jugador: {playerName}");
+            sessionManager?.ClearSession();
+            ShowLogin();
+        }
 
-            // Registrar el jugador con contraseña por defecto
-            RegisterNewPlayer(playerName);
+        #endregion
 
-            // Ocultar ventana y notificar
+        #region Event Handlers
+
+        private void OnPresenterLoginSuccessful(string email, string playerName, IPlayerCredentials playerData)
+        {
+            Debug.Log($"[PlayerLoginController] Login exitoso: {email} -> {playerName}");
+            
+            CurrentEmail = email;
+            CurrentPlayerName = playerName;
+            CurrentPlayerData = playerData;
+
+            // Crear sesión para auto-login futuro
+            sessionManager?.CreateSession(email, playerName, playerData?.CharacterClass);
+
+            // Guardar nombre del jugador actual para compatibilidad legacy
+            SaveCurrentPlayerLegacy(playerName);
+
             HideLogin();
-            OnNewPlayerCreation?.Invoke(playerName);
+            OnLoginSuccess?.Invoke(email, playerName, playerData);
         }
 
         private void OnPresenterBackRequested()
@@ -204,9 +316,9 @@ namespace Scripts.UI.PlayerLogin
             OnBackToMenu?.Invoke();
         }
 
-        private void SaveCurrentPlayer(string playerName)
+        private void SaveCurrentPlayerLegacy(string playerName)
         {
-            // Guardar el nombre del jugador actual en ISaveService
+            // Compatibilidad con sistema legacy
             if (ServiceLocator.TryGet<ISaveService>(out var saveService))
             {
                 saveService.SetString("current_player", playerName);
@@ -214,15 +326,6 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
-        private void RegisterNewPlayer(string playerName)
-        {
-            // Registrar nuevo jugador con contraseña por defecto
-            // El usuario podrá cambiar la contraseña después
-            if (ServiceLocator.TryGet<IPlayerRepository>(out var repository))
-            {
-                repository.RegisterPlayer(playerName, PlayerLoginSettings.DefaultPassword);
-                Debug.Log($"[PlayerLoginController] Jugador registrado con contraseña por defecto: {playerName}");
-            }
-        }
+        #endregion
     }
 }

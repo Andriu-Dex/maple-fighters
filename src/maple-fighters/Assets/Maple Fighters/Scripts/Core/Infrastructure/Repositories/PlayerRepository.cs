@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Scripts.Core.Domain.Interfaces;
@@ -9,11 +10,17 @@ namespace Scripts.Core.Infrastructure.Repositories
     /// <summary>
     /// Implementación del repositorio de jugadores.
     /// Usa ISaveService para persistencia de datos.
+    /// Soporta tanto búsqueda por email (v2) como por nombre (v1 legacy).
     /// </summary>
     public class PlayerRepository : IPlayerRepository
     {
         private readonly ISaveService saveService;
-        private Dictionary<string, PlayerCredentialsData> players;
+        
+        // Índice principal por email (clave primaria en v2)
+        private Dictionary<string, PlayerCredentialsData> playersByEmail;
+        
+        // Índice secundario por nombre (para compatibilidad con v1)
+        private Dictionary<string, PlayerCredentialsData> playersByName;
 
         /// <summary>
         /// Constructor que recibe el servicio de persistencia.
@@ -22,9 +29,184 @@ namespace Scripts.Core.Infrastructure.Repositories
         public PlayerRepository(ISaveService saveService)
         {
             this.saveService = saveService;
-            this.players = new Dictionary<string, PlayerCredentialsData>();
+            this.playersByEmail = new Dictionary<string, PlayerCredentialsData>(StringComparer.OrdinalIgnoreCase);
+            this.playersByName = new Dictionary<string, PlayerCredentialsData>(StringComparer.OrdinalIgnoreCase);
             LoadPlayers();
         }
+
+        #region Email-based Methods (v2)
+
+        /// <inheritdoc/>
+        public bool EmailExists(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return false;
+            }
+            return playersByEmail.ContainsKey(email);
+        }
+
+        /// <inheritdoc/>
+        public IPlayerCredentials GetPlayerByEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return null;
+            }
+            return playersByEmail.TryGetValue(email, out var player) ? player : null;
+        }
+
+        /// <inheritdoc/>
+        public IPlayerCredentials CreatePlayerWithEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return null;
+            }
+
+            if (playersByEmail.ContainsKey(email))
+            {
+                Debug.LogWarning($"[PlayerRepository] Email ya existe: {email}");
+                return null;
+            }
+
+            var newPlayer = new PlayerCredentialsData(email);
+            playersByEmail[email] = newPlayer;
+            SavePlayers();
+
+            Debug.Log($"[PlayerRepository] Jugador creado con email: {email}");
+            return newPlayer;
+        }
+
+        /// <inheritdoc/>
+        public bool CompleteRegistration(string email, string playerName, string password, string characterClass)
+        {
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(playerName) || 
+                string.IsNullOrEmpty(password) || string.IsNullOrEmpty(characterClass))
+            {
+                return false;
+            }
+
+            if (!playersByEmail.TryGetValue(email, out var player))
+            {
+                Debug.LogWarning($"[PlayerRepository] Email no encontrado para completar registro: {email}");
+                return false;
+            }
+
+            // Verificar que el nombre no esté en uso
+            var nameKey = playerName.ToLowerInvariant();
+            if (playersByName.ContainsKey(nameKey))
+            {
+                Debug.LogWarning($"[PlayerRepository] Nombre de jugador ya en uso: {playerName}");
+                return false;
+            }
+
+            // Completar los datos
+            player.PlayerName = playerName;
+            player.Password = password;
+            player.CharacterClass = characterClass;
+            player.CharacterId = Guid.NewGuid().ToString();
+
+            // Agregar al índice por nombre
+            playersByName[nameKey] = player;
+
+            SavePlayers();
+
+            Debug.Log($"[PlayerRepository] Registro completado para: {email} -> {playerName} ({characterClass})");
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public void UpdateLastLogin(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return;
+            }
+
+            if (playersByEmail.TryGetValue(email, out var player))
+            {
+                player.UpdateLastLogin();
+                SavePlayers();
+            }
+        }
+
+        /// <inheritdoc/>
+        public int IncrementFailedAttemptsByEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return 0;
+            }
+
+            if (!playersByEmail.TryGetValue(email, out var player))
+            {
+                return 0;
+            }
+
+            player.FailedAttempts++;
+
+            if (player.FailedAttempts >= PlayerLoginSettings.MaxLoginAttempts)
+            {
+                player.IsBlocked = true;
+                Debug.Log($"[PlayerRepository] Jugador bloqueado por intentos fallidos: {email}");
+            }
+
+            SavePlayers();
+            return player.FailedAttempts;
+        }
+
+        /// <inheritdoc/>
+        public void ResetFailedAttemptsByEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return;
+            }
+
+            if (playersByEmail.TryGetValue(email, out var player))
+            {
+                player.FailedAttempts = 0;
+                SavePlayers();
+            }
+        }
+
+        /// <inheritdoc/>
+        public void BlockPlayerByEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return;
+            }
+
+            if (playersByEmail.TryGetValue(email, out var player))
+            {
+                player.IsBlocked = true;
+                SavePlayers();
+                Debug.Log($"[PlayerRepository] Jugador bloqueado: {email}");
+            }
+        }
+
+        /// <inheritdoc/>
+        public void UnblockPlayerByEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return;
+            }
+
+            if (playersByEmail.TryGetValue(email, out var player))
+            {
+                player.IsBlocked = false;
+                player.FailedAttempts = 0;
+                SavePlayers();
+                Debug.Log($"[PlayerRepository] Jugador desbloqueado: {email}");
+            }
+        }
+
+        #endregion
+
+        #region PlayerName-based Methods (legacy v1)
 
         /// <inheritdoc/>
         public bool PlayerExists(string playerName)
@@ -33,7 +215,7 @@ namespace Scripts.Core.Infrastructure.Repositories
             {
                 return false;
             }
-            return players.ContainsKey(playerName.ToLowerInvariant());
+            return playersByName.ContainsKey(playerName);
         }
 
         /// <inheritdoc/>
@@ -43,9 +225,7 @@ namespace Scripts.Core.Infrastructure.Repositories
             {
                 return null;
             }
-
-            var key = playerName.ToLowerInvariant();
-            return players.TryGetValue(key, out var player) ? player : null;
+            return playersByName.TryGetValue(playerName, out var player) ? player : null;
         }
 
         /// <inheritdoc/>
@@ -56,17 +236,22 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return false;
             }
 
-            var key = playerName.ToLowerInvariant();
-            if (players.ContainsKey(key))
+            if (playersByName.ContainsKey(playerName))
             {
                 return false;
             }
 
+            #pragma warning disable CS0618 // Type or member is obsolete
             var newPlayer = new PlayerCredentialsData(playerName, password);
-            players.Add(key, newPlayer);
+            #pragma warning restore CS0618
+
+            // Agregar a ambos índices
+            playersByEmail[newPlayer.Email] = newPlayer;
+            playersByName[playerName] = newPlayer;
+
             SavePlayers();
 
-            Debug.Log($"[PlayerRepository] Jugador registrado: {playerName}");
+            Debug.Log($"[PlayerRepository] Jugador registrado (legacy): {playerName}");
             return true;
         }
 
@@ -78,8 +263,7 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return false;
             }
 
-            var key = playerName.ToLowerInvariant();
-            if (!players.TryGetValue(key, out var player))
+            if (!playersByName.TryGetValue(playerName, out var player))
             {
                 return false;
             }
@@ -99,15 +283,13 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return 0;
             }
 
-            var key = playerName.ToLowerInvariant();
-            if (!players.TryGetValue(key, out var player))
+            if (!playersByName.TryGetValue(playerName, out var player))
             {
                 return 0;
             }
 
             player.FailedAttempts++;
-            
-            // Auto-bloquear si excede el límite
+
             if (player.FailedAttempts >= PlayerLoginSettings.MaxLoginAttempts)
             {
                 player.IsBlocked = true;
@@ -126,8 +308,7 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return;
             }
 
-            var key = playerName.ToLowerInvariant();
-            if (players.TryGetValue(key, out var player))
+            if (playersByName.TryGetValue(playerName, out var player))
             {
                 player.FailedAttempts = 0;
                 SavePlayers();
@@ -142,8 +323,7 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return;
             }
 
-            var key = playerName.ToLowerInvariant();
-            if (players.TryGetValue(key, out var player))
+            if (playersByName.TryGetValue(playerName, out var player))
             {
                 player.IsBlocked = true;
                 SavePlayers();
@@ -159,8 +339,7 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return;
             }
 
-            var key = playerName.ToLowerInvariant();
-            if (players.TryGetValue(key, out var player))
+            if (playersByName.TryGetValue(playerName, out var player))
             {
                 player.IsBlocked = false;
                 player.FailedAttempts = 0;
@@ -169,10 +348,14 @@ namespace Scripts.Core.Infrastructure.Repositories
             }
         }
 
+        #endregion
+
+        #region Common Methods
+
         /// <inheritdoc/>
         public void UnblockAllPlayers()
         {
-            foreach (var player in players.Values)
+            foreach (var player in playersByEmail.Values)
             {
                 player.IsBlocked = false;
                 player.FailedAttempts = 0;
@@ -184,12 +367,16 @@ namespace Scripts.Core.Infrastructure.Repositories
         /// <inheritdoc/>
         public IReadOnlyList<string> GetBlockedPlayers()
         {
-            return players.Values
+            return playersByEmail.Values
                 .Where(p => p.IsBlocked)
-                .Select(p => p.PlayerName)
+                .Select(p => string.IsNullOrEmpty(p.PlayerName) ? p.Email : p.PlayerName)
                 .ToList()
                 .AsReadOnly();
         }
+
+        #endregion
+
+        #region Persistence
 
         private void LoadPlayers()
         {
@@ -202,25 +389,34 @@ namespace Scripts.Core.Infrastructure.Repositories
             var json = saveService.GetString(PlayerLoginSettings.PlayersStorageKey, string.Empty);
             if (string.IsNullOrEmpty(json))
             {
-                players = new Dictionary<string, PlayerCredentialsData>();
+                playersByEmail = new Dictionary<string, PlayerCredentialsData>(StringComparer.OrdinalIgnoreCase);
+                playersByName = new Dictionary<string, PlayerCredentialsData>(StringComparer.OrdinalIgnoreCase);
                 return;
             }
 
             var collection = PlayerCredentialsCollection.FromJson(json);
-            players = new Dictionary<string, PlayerCredentialsData>();
+            playersByEmail = new Dictionary<string, PlayerCredentialsData>(StringComparer.OrdinalIgnoreCase);
+            playersByName = new Dictionary<string, PlayerCredentialsData>(StringComparer.OrdinalIgnoreCase);
 
             if (collection?.players != null)
             {
                 foreach (var player in collection.players)
                 {
+                    // Índice por email (siempre disponible en v2)
+                    if (!string.IsNullOrEmpty(player.Email))
+                    {
+                        playersByEmail[player.Email] = player;
+                    }
+
+                    // Índice por nombre (si está disponible)
                     if (!string.IsNullOrEmpty(player.PlayerName))
                     {
-                        players[player.PlayerName.ToLowerInvariant()] = player;
+                        playersByName[player.PlayerName] = player;
                     }
                 }
             }
 
-            Debug.Log($"[PlayerRepository] Cargados {players.Count} jugadores");
+            Debug.Log($"[PlayerRepository] Cargados {playersByEmail.Count} jugadores (por email), {playersByName.Count} (por nombre)");
         }
 
         private void SavePlayers()
@@ -231,11 +427,14 @@ namespace Scripts.Core.Infrastructure.Repositories
                 return;
             }
 
-            var collection = new PlayerCredentialsCollection(players.Values.ToArray());
+            // Guardar todos los jugadores únicos (usando el índice por email como fuente principal)
+            var collection = new PlayerCredentialsCollection(playersByEmail.Values.ToArray());
             var json = collection.ToJson();
 
             saveService.SetString(PlayerLoginSettings.PlayersStorageKey, json);
             saveService.Save();
         }
+
+        #endregion
     }
 }

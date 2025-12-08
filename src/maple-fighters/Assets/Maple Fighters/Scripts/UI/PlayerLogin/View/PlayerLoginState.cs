@@ -1,48 +1,81 @@
 namespace Scripts.UI.PlayerLogin
 {
     /// <summary>
-    /// Estados posibles del flujo de login de jugadores.
+    /// Estados posibles del flujo de login de jugadores (v2 con email).
     /// </summary>
     public enum PlayerLoginState
     {
-        /// <summary>
-        /// Estado inicial - esperando entrada del nombre.
-        /// </summary>
-        EnterName,
+        #region v2 States (Email-based flow)
 
         /// <summary>
-        /// Verificando si el jugador existe.
+        /// Estado inicial - esperando entrada del email.
         /// </summary>
-        CheckingName,
+        EnterEmail,
 
         /// <summary>
-        /// Jugador existe - esperando contraseña.
+        /// Verificando si el email existe.
         /// </summary>
-        EnterPassword,
+        CheckingEmail,
 
         /// <summary>
-        /// Validando credenciales.
+        /// Email existe y registro completo - pedir contraseña para login.
+        /// </summary>
+        EnterPasswordForLogin,
+
+        /// <summary>
+        /// Email no existe - es nuevo usuario, seleccionar personaje.
+        /// </summary>
+        SelectCharacter,
+
+        /// <summary>
+        /// Personaje seleccionado - pedir nombre y contraseña para completar registro.
+        /// </summary>
+        EnterRegistrationData,
+
+        /// <summary>
+        /// Validando credenciales (login o registro).
         /// </summary>
         Validating,
 
         /// <summary>
-        /// Login exitoso - entrando al juego.
+        /// Login/Registro exitoso - entrando al juego.
         /// </summary>
         Success,
 
         /// <summary>
-        /// Jugador no existe - redirigiendo a creación de personaje.
-        /// </summary>
-        NewPlayer,
-
-        /// <summary>
-        /// Jugador bloqueado por intentos fallidos.
+        /// Cuenta bloqueada por intentos fallidos.
         /// </summary>
         Blocked,
 
         /// <summary>
-        /// Error en el proceso de login.
+        /// Error en el proceso.
         /// </summary>
-        Error
+        Error,
+
+        #endregion
+
+        #region v1 States (Legacy - PlayerName-based)
+
+        /// <summary>
+        /// [Legacy v1] Estado inicial - esperando entrada del nombre.
+        /// </summary>
+        EnterName,
+
+        /// <summary>
+        /// [Legacy v1] Verificando si el jugador existe.
+        /// </summary>
+        CheckingName,
+
+        /// <summary>
+        /// [Legacy v1] Jugador existe - esperando contraseña.
+        /// </summary>
+        EnterPassword,
+
+        /// <summary>
+        /// [Legacy v1] Jugador no existe - redirigiendo a creación.
+        /// </summary>
+        NewPlayer
+
+        #endregion
     }
 }

@@ -123,6 +123,10 @@ namespace Scripts.Core.Infrastructure
             // Obtener el SaveService ya registrado
             var saveService = ServiceLocator.Get<ISaveService>();
 
+            // Registrar SessionManager (v2)
+            var sessionManager = new SessionManager(saveService);
+            ServiceLocator.Register<ISessionManager>(sessionManager);
+
             // Registrar PlayerRepository
             var playerRepository = new PlayerRepository(saveService);
             ServiceLocator.Register<IPlayerRepository>(playerRepository);
