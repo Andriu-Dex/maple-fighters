@@ -138,7 +138,7 @@ namespace Scripts.UI.PlayerLogin
                     view.ShowLoginPanel();
                     view.HideCharacterSelectionPanel();
                     view.HideRegistrationPanel();
-                    view.Title = "Ingresa tu email";
+                    view.Title = "<color=#FFFFFF>Ingresa tu email</color>";
                     view.Placeholder = "email@ejemplo.com";
                     view.StatusMessage = string.Empty;
                     view.SetPasswordMode(false);
@@ -150,7 +150,7 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case PlayerLoginState.CheckingEmail:
-                    view.StatusMessage = "Verificando email...";
+                    view.StatusMessage = "<color=#AADDFF>⏳ Verificando email...</color>";
                     view.DisableInteraction();
                     break;
 
@@ -158,9 +158,9 @@ namespace Scripts.UI.PlayerLogin
                     view.ShowLoginPanel();
                     view.HideCharacterSelectionPanel();
                     view.HideRegistrationPanel();
-                    view.Title = $"Bienvenido de nuevo";
+                    view.Title = "<color=#FFD700>¡Bienvenido de nuevo!</color>";
                     view.Placeholder = "Contraseña";
-                    view.StatusMessage = $"Email: {currentEmail}";
+                    view.StatusMessage = $"<color=#AADDFF><size=14>📧 {currentEmail}</size></color>";
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
@@ -173,9 +173,9 @@ namespace Scripts.UI.PlayerLogin
                     view.ShowLoginPanel();
                     view.HideCharacterSelectionPanel();
                     view.HideRegistrationPanel();
-                    view.Title = "Crear contraseña";
+                    view.Title = "<color=#90EE90>¡Nuevo usuario!</color>";
                     view.Placeholder = "Nueva contraseña";
-                    view.StatusMessage = $"Email: {currentEmail}\nCrea una contraseña para tu cuenta";
+                    view.StatusMessage = $"<color=#AADDFF><size=14>📧 {currentEmail}</size></color>\n<color=#FFFFFF><size=12>Crea una contraseña segura para tu cuenta</size></color>";
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
@@ -199,17 +199,17 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case PlayerLoginState.Validating:
-                    view.StatusMessage = "Validando...";
+                    view.StatusMessage = "<color=#AADDFF>⏳ Validando...</color>";
                     view.DisableInteraction();
                     break;
 
                 case PlayerLoginState.Success:
-                    view.StatusMessage = "¡Login exitoso!";
+                    view.StatusMessage = "<color=#90EE90>✅ ¡Login exitoso!</color>";
                     view.DisableInteraction();
                     break;
 
                 case PlayerLoginState.Blocked:
-                    view.StatusMessage = "⚠️ Cuenta bloqueada por seguridad.\nContacta al usuario 'Admin' para desbloquearla.";
+                    view.StatusMessage = "<color=#FF6B6B>⚠️ Cuenta bloqueada por seguridad</color>\n<color=#FFFFFF><size=12>Contacta al Admin para desbloquearla</size></color>";
                     view.DisableConfirmButton();
                     view.EnableBackButton(); // Habilitar explícitamente para poder volver e intentar con otra cuenta
                     break;

@@ -16,6 +16,9 @@ namespace Scripts.UI.PlayerLogin
     /// </summary>
     public class PlayerLoginController : MonoBehaviour
     {
+        // Singleton simple para evitar múltiples instancias
+        private static PlayerLoginController instance;
+
         [Header("View Reference (Opcional)")]
         [Tooltip("Si no se asigna, se crea automáticamente desde Resources/UI/PlayerLoginWindow")]
         [SerializeField]
@@ -96,8 +99,23 @@ namespace Scripts.UI.PlayerLogin
 
         #endregion
 
+        private void Awake()
+        {
+            // Singleton: destruir duplicados
+            if (instance != null && instance != this)
+            {
+                Debug.LogWarning("[PlayerLoginController] Instancia duplicada detectada, destruyendo...");
+                Destroy(gameObject);
+                return;
+            }
+            instance = this;
+        }
+
         private void Start()
         {
+            // Si fuimos marcados para destrucción, no continuar
+            if (instance != this) return;
+
             InitializeServices();
             
             if (loginWindow == null)
@@ -121,6 +139,12 @@ namespace Scripts.UI.PlayerLogin
 
         private void OnDestroy()
         {
+            // Limpiar singleton si somos la instancia activa
+            if (instance == this)
+            {
+                instance = null;
+            }
+
             CleanupPresenter();
             
             if (windowCreatedDynamically && loginWindow != null)
@@ -190,6 +214,9 @@ namespace Scripts.UI.PlayerLogin
                 Debug.LogError("[PlayerLoginController] LoginWindow no disponible");
                 return;
             }
+
+            // Limpiar presenter anterior si existe
+            CleanupPresenter();
 
             presenter = new PlayerLoginPresenter(loginWindow, cachedLoginApi, cachedValidator);
             presenter.LoginSuccessful += OnPresenterLoginSuccessful;
