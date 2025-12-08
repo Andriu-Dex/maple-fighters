@@ -26,49 +26,63 @@ namespace Scripts.Core.Infrastructure.Services
         }
 
         /// <inheritdoc/>
-        public bool RecordFailedAttempt(string playerName)
+        public bool RecordFailedAttempt(string playerNameOrEmail)
         {
-            if (playerRepository == null || string.IsNullOrEmpty(playerName))
+            if (playerRepository == null || string.IsNullOrEmpty(playerNameOrEmail))
             {
                 return false;
             }
 
-            var failedAttempts = playerRepository.IncrementFailedAttempts(playerName);
+            // Detectar si es un email (contiene '@') y usar el método apropiado
+            var failedAttempts = playerNameOrEmail.Contains("@")
+                ? playerRepository.IncrementFailedAttemptsByEmail(playerNameOrEmail)
+                : playerRepository.IncrementFailedAttempts(playerNameOrEmail);
             var isNowBlocked = failedAttempts >= MaxAttempts;
 
             if (isNowBlocked)
             {
-                Debug.Log($"[LoginAttemptTracker] Jugador bloqueado: {playerName} (intentos: {failedAttempts})");
+                Debug.Log($"[LoginAttemptTracker] Jugador bloqueado: {playerNameOrEmail} (intentos: {failedAttempts})");
             }
             else
             {
-                Debug.Log($"[LoginAttemptTracker] Intento fallido: {playerName} ({failedAttempts}/{MaxAttempts})");
+                Debug.Log($"[LoginAttemptTracker] Intento fallido: {playerNameOrEmail} ({failedAttempts}/{MaxAttempts})");
             }
 
             return isNowBlocked;
         }
 
         /// <inheritdoc/>
-        public void RecordSuccessfulLogin(string playerName)
+        public void RecordSuccessfulLogin(string playerNameOrEmail)
         {
-            if (playerRepository == null || string.IsNullOrEmpty(playerName))
+            if (playerRepository == null || string.IsNullOrEmpty(playerNameOrEmail))
             {
                 return;
             }
 
-            playerRepository.ResetFailedAttempts(playerName);
-            Debug.Log($"[LoginAttemptTracker] Login exitoso, intentos reseteados: {playerName}");
+            // Detectar si es un email (contiene '@') y usar el método apropiado
+            if (playerNameOrEmail.Contains("@"))
+            {
+                playerRepository.ResetFailedAttemptsByEmail(playerNameOrEmail);
+            }
+            else
+            {
+                playerRepository.ResetFailedAttempts(playerNameOrEmail);
+            }
+            Debug.Log($"[LoginAttemptTracker] Login exitoso, intentos reseteados: {playerNameOrEmail}");
         }
 
         /// <inheritdoc/>
-        public int GetFailedAttempts(string playerName)
+        public int GetFailedAttempts(string playerNameOrEmail)
         {
-            if (playerRepository == null || string.IsNullOrEmpty(playerName))
+            if (playerRepository == null || string.IsNullOrEmpty(playerNameOrEmail))
             {
                 return 0;
             }
 
-            var player = playerRepository.GetPlayer(playerName);
+            // Detectar si es un email (contiene '@') y usar el método apropiado
+            var player = playerNameOrEmail.Contains("@") 
+                ? playerRepository.GetPlayerByEmail(playerNameOrEmail)
+                : playerRepository.GetPlayer(playerNameOrEmail);
             return player?.FailedAttempts ?? 0;
         }
 
@@ -80,27 +94,39 @@ namespace Scripts.Core.Infrastructure.Services
         }
 
         /// <inheritdoc/>
-        public bool IsBlocked(string playerName)
+        public bool IsBlocked(string playerNameOrEmail)
         {
-            if (playerRepository == null || string.IsNullOrEmpty(playerName))
+            if (playerRepository == null || string.IsNullOrEmpty(playerNameOrEmail))
             {
                 return false;
             }
 
-            var player = playerRepository.GetPlayer(playerName);
+            // Detectar si es un email (contiene '@') y usar el método apropiado
+            var player = playerNameOrEmail.Contains("@") 
+                ? playerRepository.GetPlayerByEmail(playerNameOrEmail)
+                : playerRepository.GetPlayer(playerNameOrEmail);
             return player?.IsBlocked ?? false;
         }
 
         /// <inheritdoc/>
-        public void Unblock(string playerName)
+        public void Unblock(string playerNameOrEmail)
         {
-            if (playerRepository == null || string.IsNullOrEmpty(playerName))
+            if (playerRepository == null || string.IsNullOrEmpty(playerNameOrEmail))
             {
                 return;
             }
 
-            playerRepository.UnblockPlayer(playerName);
-            Debug.Log($"[LoginAttemptTracker] Jugador desbloqueado: {playerName}");
+            // Detectar si es un email (contiene '@') y usar el método apropiado
+            if (playerNameOrEmail.Contains("@"))
+            {
+                playerRepository.UnblockPlayerByEmail(playerNameOrEmail);
+                Debug.Log($"[LoginAttemptTracker] Jugador desbloqueado por email: {playerNameOrEmail}");
+            }
+            else
+            {
+                playerRepository.UnblockPlayer(playerNameOrEmail);
+                Debug.Log($"[LoginAttemptTracker] Jugador desbloqueado por nombre: {playerNameOrEmail}");
+            }
         }
 
         /// <inheritdoc/>
