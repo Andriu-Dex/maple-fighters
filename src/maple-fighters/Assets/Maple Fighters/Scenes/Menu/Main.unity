@@ -153,7 +153,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   toggleKey: 293
-  showInBuild: 0
+  showInBuild: 1
 --- !u!4 &162136942
 Transform:
   m_ObjectHideFlags: 0
@@ -343,6 +343,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   loginWindow: {fileID: 0}
+  adminPanel: {fileID: 0}
   showOnStart: 1
   enableAutoLogin: 0
 --- !u!4 &870329708
@@ -538,6 +539,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   loginWindow: {fileID: 0}
+  adminPanel: {fileID: 0}
   showOnStart: 1
   enableAutoLogin: 0
 --- !u!4 &1357026881
