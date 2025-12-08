@@ -47,6 +47,23 @@ namespace Scripts.UI.PlayerLogin
         [SerializeField]
         private Text placeholderText;
 
+        [Header("=== Password Toggle ===")]
+        [SerializeField]
+        [Tooltip("Botón para mostrar/ocultar contraseña (icono de ojo)")]
+        private Button togglePasswordButton;
+
+        [SerializeField]
+        [Tooltip("Icono cuando la contraseña está oculta (ojo cerrado). Opcional si usas texto.")]
+        private GameObject hidePasswordIcon;
+
+        [SerializeField]
+        [Tooltip("Icono cuando la contraseña está visible (ojo abierto). Opcional si usas texto.")]
+        private GameObject showPasswordIcon;
+
+        [SerializeField]
+        [Tooltip("Texto del botón (alternativa a iconos). Se actualiza automáticamente.")]
+        private Text togglePasswordText;
+
         #endregion
 
         #region Serialized Fields - Character Selection Panel
@@ -108,6 +125,8 @@ namespace Scripts.UI.PlayerLogin
 
         private string currentEmail = string.Empty;
         private string selectedCharacterClass = string.Empty;
+        private bool isPasswordVisible = false;
+        private bool isInPasswordMode = false;
 
         #endregion
 
@@ -188,6 +207,12 @@ namespace Scripts.UI.PlayerLogin
             // Inicialmente ocultar paneles secundarios
             HideCharacterSelectionPanel();
             HideRegistrationPanel();
+            
+            // Ocultar botón de toggle de contraseña inicialmente
+            if (togglePasswordButton != null)
+            {
+                togglePasswordButton.gameObject.SetActive(false);
+            }
         }
 
         private void Start()
@@ -196,6 +221,7 @@ namespace Scripts.UI.PlayerLogin
             confirmButton?.onClick.AddListener(OnConfirmButtonClicked);
             backButton?.onClick.AddListener(OnBackButtonClicked);
             inputField?.onValueChanged.AddListener(OnInputFieldChanged);
+            togglePasswordButton?.onClick.AddListener(OnTogglePasswordVisibility);
 
             // Character selection events
             knightButton?.onClick.AddListener(() => OnCharacterSelected("Knight"));
@@ -213,6 +239,7 @@ namespace Scripts.UI.PlayerLogin
             confirmButton?.onClick.RemoveAllListeners();
             backButton?.onClick.RemoveAllListeners();
             inputField?.onValueChanged.RemoveAllListeners();
+            togglePasswordButton?.onClick.RemoveAllListeners();
 
             // Cleanup character selection
             knightButton?.onClick.RemoveAllListeners();
@@ -264,12 +291,89 @@ namespace Scripts.UI.PlayerLogin
 
         public void SetPasswordMode(bool isPassword)
         {
+            isInPasswordMode = isPassword;
+            isPasswordVisible = false; // Reset visibility when changing mode
+            
             if (inputField != null)
             {
                 inputField.contentType = isPassword
                     ? InputField.ContentType.Password
                     : InputField.ContentType.Standard;
                 inputField.ForceLabelUpdate();
+            }
+            
+            // Mostrar/ocultar botón de toggle según el modo
+            UpdatePasswordToggleButton();
+        }
+
+        /// <summary>
+        /// Toggle de visibilidad de la contraseña (llamado por el botón de ojo)
+        /// </summary>
+        private void OnTogglePasswordVisibility()
+        {
+            if (!isInPasswordMode) return;
+            
+            isPasswordVisible = !isPasswordVisible;
+            
+            if (inputField != null)
+            {
+                // Guardar texto actual y posición del cursor
+                string currentText = inputField.text;
+                int caretPosition = inputField.caretPosition;
+                
+                inputField.contentType = isPasswordVisible
+                    ? InputField.ContentType.Standard
+                    : InputField.ContentType.Password;
+                
+                // Restaurar texto y forzar actualización
+                inputField.text = currentText;
+                inputField.ForceLabelUpdate();
+                
+                // Restaurar foco y posición del cursor
+                inputField.Select();
+                inputField.caretPosition = caretPosition;
+            }
+            
+            UpdatePasswordToggleIcons();
+        }
+
+        /// <summary>
+        /// Actualiza la visibilidad del botón de toggle de contraseña
+        /// </summary>
+        private void UpdatePasswordToggleButton()
+        {
+            if (togglePasswordButton != null)
+            {
+                togglePasswordButton.gameObject.SetActive(isInPasswordMode);
+            }
+            
+            UpdatePasswordToggleIcons();
+        }
+
+        /// <summary>
+        /// Actualiza los iconos del botón según el estado de visibilidad
+        /// </summary>
+        private void UpdatePasswordToggleIcons()
+        {
+            // Si la contraseña está visible, mostrar icono de "ocultar" (ojo abierto)
+            // Si la contraseña está oculta, mostrar icono de "mostrar" (ojo cerrado)
+            if (hidePasswordIcon != null)
+            {
+                hidePasswordIcon.SetActive(!isPasswordVisible);
+            }
+            
+            if (showPasswordIcon != null)
+            {
+                showPasswordIcon.SetActive(isPasswordVisible);
+            }
+            
+            // Alternativa: actualizar texto del botón si no hay iconos
+            if (togglePasswordText != null)
+            {
+                // Usar símbolos Unicode como alternativa a iconos
+                // 👁 (ojo) cuando está oculto = "mostrar"
+                // ✕ o 👁‍🗨 cuando está visible = "ocultar"
+                togglePasswordText.text = isPasswordVisible ? "⊗" : "👁";
             }
         }
 
