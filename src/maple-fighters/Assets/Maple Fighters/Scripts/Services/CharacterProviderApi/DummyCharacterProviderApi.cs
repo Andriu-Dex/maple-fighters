@@ -103,6 +103,8 @@ namespace Scripts.Services.CharacterProviderApi
 
         public void UpdateCharacter(int characterid, int characterlevel, float characterexperience)
         {
+            Debug.Log($"[DummyCharacterProviderApi] UpdateCharacter: id={characterid}, level={characterlevel}, exp={characterexperience}");
+            
             if (characters.Count == 0)
             {
                 // Usar IUserSession del ServiceLocator en lugar de FindObjectOfType
@@ -118,6 +120,11 @@ namespace Scripts.Services.CharacterProviderApi
                 characterData.characterlevel = characterlevel;
                 characterData.characterexperience = characterexperience;
                 characters[characterid] = characterData;
+                Debug.Log($"[DummyCharacterProviderApi] Personaje actualizado en memoria: {characterData.charactername} nivel={characterlevel}");
+            }
+            else
+            {
+                Debug.LogWarning($"[DummyCharacterProviderApi] No se encontró personaje con id={characterid} en memoria. characters.Count={characters.Count}");
             }
 
             SaveCharacterCollection();
@@ -185,6 +192,8 @@ namespace Scripts.Services.CharacterProviderApi
             var statusCode = (long)StatusCodes.Ok;
             var json = LoadCharactersJson();
             
+            Debug.Log($"[DummyCharacterProviderApi] GetCharacters para userId={userid}, JSON cargado: {json}");
+            
             // Lista para almacenar solo los personajes de este usuario
             var filteredCharacters = new List<CharacterData>();
 
@@ -204,20 +213,22 @@ namespace Scripts.Services.CharacterProviderApi
                     // Agregar a la lista filtrada
                     filteredCharacters.Add(character);
                     
-                    // Agregar al diccionario en memoria si no existe
-                    if (!characters.ContainsKey(character.id))
+                    // SIEMPRE actualizar el diccionario en memoria con los datos del archivo
+                    // Esto asegura que al recargar, tengamos los datos más recientes
+                    var characterData = new CharacterData()
                     {
-                        characters.Add(character.id, new CharacterData()
-                        {
-                            id = character.id,
-                            userid = character.userid,
-                            charactername = character.charactername,
-                            characterlevel = character.characterlevel,
-                            characterexperience = character.characterexperience,
-                            index = character.index,
-                            classindex = character.classindex
-                        });
-                    }
+                        id = character.id,
+                        userid = character.userid,
+                        charactername = character.charactername,
+                        characterlevel = character.characterlevel,
+                        characterexperience = character.characterexperience,
+                        index = character.index,
+                        classindex = character.classindex
+                    };
+                    
+                    characters[character.id] = characterData;
+                    
+                    Debug.Log($"[DummyCharacterProviderApi] Cargado personaje: {character.charactername} id={character.id} nivel={character.characterlevel} exp={character.characterexperience}");
                 }
             }
 
@@ -254,17 +265,21 @@ namespace Scripts.Services.CharacterProviderApi
             foreach (var kvp in characters)
             {
                 existingCharacters[kvp.Key] = kvp.Value;
+                Debug.Log($"[DummyCharacterProviderApi] Guardando: {kvp.Value.charactername} id={kvp.Key} nivel={kvp.Value.characterlevel} exp={kvp.Value.characterexperience}");
             }
             
             // Guardar la colección combinada
             var mergedCollection = new CharacterDataCollection(existingCharacters.Values.ToArray());
             var json = mergedCollection.ToString();
+            
+            Debug.Log($"[DummyCharacterProviderApi] SaveCharacterCollection: {json}");
 
             // Usar ISaveService si está disponible
             if (saveService != null)
             {
                 saveService.SetString(StorageKey, json);
                 saveService.Save();
+                Debug.Log("[DummyCharacterProviderApi] Guardado con ISaveService");
             }
             else
             {
@@ -272,6 +287,7 @@ namespace Scripts.Services.CharacterProviderApi
                 PlayerPrefs.DeleteKey(StorageKey);
                 PlayerPrefs.SetString(StorageKey, json);
                 PlayerPrefs.Save();
+                Debug.Log("[DummyCharacterProviderApi] Guardado con PlayerPrefs (fallback)");
             }
         }
 

@@ -123,11 +123,18 @@ namespace Scripts.UI.CharacterSelection
 
         private void OnGetCharactersCallback(long statusCode, string json)
         {
+            UnityEngine.Debug.Log($"[CharacterViewInteractor] OnGetCharactersCallback: statusCode={statusCode}, json={json}");
+            
             var characters = GetSampleCharacterData();
 
             if (statusCode == (long)StatusCodes.Ok)
             {
                 SetCharacters(ref characters, json);
+                UnityEngine.Debug.Log($"[CharacterViewInteractor] Después de SetCharacters: {characters.Length} personajes");
+                foreach (var c in characters)
+                {
+                    UnityEngine.Debug.Log($"[CharacterViewInteractor] Personaje en array: id={c.id}, nombre={c.charactername}, nivel={c.characterlevel}, exp={c.characterexperience}");
+                }
             }
 
             foreach (var character in characters)

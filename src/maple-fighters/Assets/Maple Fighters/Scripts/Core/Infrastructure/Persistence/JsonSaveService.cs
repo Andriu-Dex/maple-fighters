@@ -8,19 +8,30 @@ namespace Scripts.Core.Infrastructure.Persistence
 {
     /// <summary>
     /// Implementación de ISaveService que guarda datos en formato JSON.
-    /// Los datos se almacenan en Application.persistentDataPath.
+    /// En WebGL usa PlayerPrefs (IndexedDB), en otras plataformas usa archivos.
     /// </summary>
     public class JsonSaveService : ISaveService
     {
         private const string SaveFileName = "game_save_data.json";
+        private const string PlayerPrefsKey = "JsonSaveService_Data";
         
         private Dictionary<string, object> data;
         private readonly string savePath;
         private bool isDirty;
+        private readonly bool usePlayerPrefs;
 
         public JsonSaveService()
         {
+            // En WebGL no podemos usar el sistema de archivos, usamos PlayerPrefs (IndexedDB)
+#if UNITY_WEBGL && !UNITY_EDITOR
+            usePlayerPrefs = true;
+            savePath = string.Empty;
+            Debug.Log("[JsonSaveService] WebGL detectado - usando PlayerPrefs (IndexedDB)");
+#else
+            usePlayerPrefs = false;
             savePath = Path.Combine(Application.persistentDataPath, SaveFileName);
+            Debug.Log($"[JsonSaveService] Usando archivos - path: {savePath}");
+#endif
             data = new Dictionary<string, object>();
             LoadFromFile();
         }
@@ -142,16 +153,23 @@ namespace Scripts.Core.Infrastructure.Persistence
 
             try
             {
-                var wrapper = new SaveDataWrapper { Data = data };
-                var json = JsonUtility.ToJson(wrapper, prettyPrint: true);
+                var json = SerializeDictionary(data);
                 
-                // JsonUtility no serializa Dictionary directamente, usamos enfoque manual
-                json = SerializeDictionary(data);
+                if (usePlayerPrefs)
+                {
+                    // WebGL: usar PlayerPrefs (se mapea a IndexedDB)
+                    PlayerPrefs.SetString(PlayerPrefsKey, json);
+                    PlayerPrefs.Save();
+                    Debug.Log($"[JsonSaveService] Data saved to PlayerPrefs (WebGL)");
+                }
+                else
+                {
+                    // Otras plataformas: usar archivo
+                    File.WriteAllText(savePath, json);
+                    Debug.Log($"[JsonSaveService] Data saved to: {savePath}");
+                }
                 
-                File.WriteAllText(savePath, json);
                 isDirty = false;
-                
-                Debug.Log($"[JsonSaveService] Data saved to: {savePath}");
             }
             catch (Exception ex)
             {
@@ -163,16 +181,42 @@ namespace Scripts.Core.Infrastructure.Persistence
         {
             try
             {
-                if (File.Exists(savePath))
+                string json = string.Empty;
+                
+                if (usePlayerPrefs)
                 {
-                    var json = File.ReadAllText(savePath);
+                    // WebGL: leer de PlayerPrefs
+                    if (PlayerPrefs.HasKey(PlayerPrefsKey))
+                    {
+                        json = PlayerPrefs.GetString(PlayerPrefsKey);
+                        Debug.Log($"[JsonSaveService] Data loaded from PlayerPrefs (WebGL)");
+                    }
+                    else
+                    {
+                        Debug.Log("[JsonSaveService] No PlayerPrefs data found, starting fresh.");
+                    }
+                }
+                else
+                {
+                    // Otras plataformas: leer de archivo
+                    if (File.Exists(savePath))
+                    {
+                        json = File.ReadAllText(savePath);
+                        Debug.Log($"[JsonSaveService] Data loaded from: {savePath}");
+                    }
+                    else
+                    {
+                        Debug.Log("[JsonSaveService] No save file found, starting fresh.");
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(json))
+                {
                     data = DeserializeDictionary(json);
-                    Debug.Log($"[JsonSaveService] Data loaded from: {savePath}");
                 }
                 else
                 {
                     data = new Dictionary<string, object>();
-                    Debug.Log("[JsonSaveService] No save file found, starting fresh.");
                 }
             }
             catch (Exception ex)

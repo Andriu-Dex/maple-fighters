@@ -143,22 +143,9 @@ namespace Scripts.Services
                 return apiProvider.GetCharacterProviderApi();
             }
 
-            // Fallback al comportamiento original
-            var networkConfiguration = NetworkConfiguration.GetInstance();
-            if (networkConfiguration.IsProduction() ||
-                networkConfiguration.IsDevelopment())
-            {
-                var userMetadata = Object.FindObjectOfType<UserMetadata>();
-                if (userMetadata != null && userMetadata.IsLoggedIn)
-                {
-                    characterProviderApi = HttpCharacterProviderApi.GetInstance();
-                }
-                else
-                {
-                    characterProviderApi = DummyCharacterProviderApi.GetInstance();
-                }
-            }
-            else
+            // SIEMPRE usar DummyCharacterProviderApi para persistencia local
+            // HttpCharacterProviderApi.UpdateCharacter está vacío y no guarda datos
+            if (characterProviderApi == null)
             {
                 characterProviderApi = DummyCharacterProviderApi.GetInstance();
             }

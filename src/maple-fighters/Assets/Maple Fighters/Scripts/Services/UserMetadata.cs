@@ -79,6 +79,7 @@ namespace Scripts.Services
         public void AddExperiencePoints(float value)
         {
             CharacterExperiencePoints += value;
+            Debug.Log($"[UserMetadata] AddExperiencePoints: +{value}, total={CharacterExperiencePoints}, nivel={CharacterLevel}, characterId={CharacterId}");
 
             VerifyCharacterLevel(value);
             SaveCharacterData();
@@ -116,6 +117,7 @@ namespace Scripts.Services
 
         private void SaveCharacterData()
         {
+            Debug.Log($"[UserMetadata] SaveCharacterData: CharacterId={CharacterId}, Level={CharacterLevel}, Exp={CharacterExperiencePoints}");
             var characterProviderApi = ApiProvider.ProvideCharacterProviderApi();
             characterProviderApi.UpdateCharacter(CharacterId, CharacterLevel, CharacterExperiencePoints);
         }

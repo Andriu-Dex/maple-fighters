@@ -141,15 +141,8 @@ namespace Scripts.Core.Infrastructure.Services
 
         private ICharacterProviderApi CreateCharacterProviderApi()
         {
-            if (networkConfiguration.ShouldUseRealApis())
-            {
-                // Verificar si el usuario está logueado
-                var userMetadata = Object.FindObjectOfType<UserMetadata>();
-                if (userMetadata != null && userMetadata.IsLoggedIn)
-                {
-                    return HttpCharacterProviderApi.GetInstance();
-                }
-            }
+            // SIEMPRE usar DummyCharacterProviderApi para persistencia local
+            // HttpCharacterProviderApi.UpdateCharacter está vacío y no guarda datos
             return DummyCharacterProviderApi.GetInstance();
         }
 
