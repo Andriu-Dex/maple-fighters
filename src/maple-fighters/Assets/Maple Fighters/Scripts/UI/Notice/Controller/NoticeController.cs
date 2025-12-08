@@ -57,6 +57,17 @@ namespace Scripts.UI.Notice
         private void OnDestroy()
         {
             UnsubscribeFromNoticeWindow();
+            
+            // Destruir la ventana de notificación para evitar objetos huérfanos
+            if (noticeView != null)
+            {
+                var viewGameObject = (noticeView as MonoBehaviour)?.gameObject;
+                if (viewGameObject != null)
+                {
+                    Destroy(viewGameObject);
+                }
+                noticeView = null;
+            }
         }
 
         private void UnsubscribeFromNoticeWindow()

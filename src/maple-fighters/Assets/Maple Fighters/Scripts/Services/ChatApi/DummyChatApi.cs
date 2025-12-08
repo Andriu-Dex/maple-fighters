@@ -27,6 +27,12 @@ namespace Scripts.Services.ChatApi
 
         private void OnDestroy()
         {
+            // Limpiar la instancia singleton
+            if (instance == this)
+            {
+                instance = null;
+            }
+            
             ApiProvider.RemoveChatApiProvider();
         }
     }

@@ -32,6 +32,12 @@ namespace Scripts.Services.GameProviderApi
 
         private void OnDestroy()
         {
+            // Limpiar la instancia singleton
+            if (instance == this)
+            {
+                instance = null;
+            }
+            
             ApiProvider.RemoveGameProviderApi();
         }
     }

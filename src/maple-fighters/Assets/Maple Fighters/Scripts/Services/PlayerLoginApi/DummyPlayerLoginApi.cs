@@ -134,13 +134,17 @@ namespace Scripts.Services.PlayerLoginApi
 
         public void LoginByEmail(string email, string password)
         {
+            Debug.Log($"[DummyPlayerLoginApi] LoginByEmail iniciado: {email}");
+            
             if (PlayerRepository == null || CredentialValidator == null)
             {
+                Debug.LogError("[DummyPlayerLoginApi] LoginByEmail: Servicios no disponibles");
                 LoginByEmailCallback?.Invoke(LoginResult.Error, 0, "Servicios no disponibles", null);
                 return;
             }
 
             var validationResult = CredentialValidator.ValidateCredentialsByEmail(email, password);
+            Debug.Log($"[DummyPlayerLoginApi] LoginByEmail validationResult: {validationResult}");
             var message = CredentialValidator.GetValidationMessage(validationResult);
             var remainingAttempts = GetRemainingAttemptsByEmail(email);
 
@@ -191,7 +195,10 @@ namespace Scripts.Services.PlayerLoginApi
                     break;
 
                 case CredentialValidationResult.RegistrationIncomplete:
+                    // Usuario existe pero sin contraseña - obtener datos del jugador
+                    playerData = PlayerRepository.GetPlayerByEmail(email);
                     loginResult = LoginResult.RegistrationIncomplete;
+                    Debug.Log($"[DummyPlayerLoginApi] LoginByEmail: Registro incompleto para {email}");
                     break;
 
                 default:
@@ -199,6 +206,7 @@ namespace Scripts.Services.PlayerLoginApi
                     break;
             }
 
+            Debug.Log($"[DummyPlayerLoginApi] LoginByEmail resultado final: {loginResult}, mensaje: {message}");
             LoginByEmailCallback?.Invoke(loginResult, remainingAttempts, message, playerData);
         }
 
@@ -232,6 +240,80 @@ namespace Scripts.Services.PlayerLoginApi
             {
                 Debug.Log($"[DummyPlayerLoginApi] Cuenta creada con email: {email}");
                 RegisterWithEmailCallback?.Invoke(RegisterResult.Success, "Cuenta creada. Seleccione su personaje.", player);
+            }
+            else
+            {
+                RegisterWithEmailCallback?.Invoke(RegisterResult.Error, "Error al crear cuenta", null);
+            }
+        }
+
+        public void RegisterWithEmail(string email, string password)
+        {
+            Debug.Log($"[DummyPlayerLoginApi] RegisterWithEmail iniciado: {email}");
+            
+            if (PlayerRepository == null || CredentialValidator == null)
+            {
+                Debug.LogError("[DummyPlayerLoginApi] RegisterWithEmail: Servicios no disponibles");
+                RegisterWithEmailCallback?.Invoke(RegisterResult.Error, "Servicios no disponibles", null);
+                return;
+            }
+
+            // Validar email
+            if (!CredentialValidator.IsValidEmail(email))
+            {
+                var message = CredentialValidator.GetValidationMessage(CredentialValidationResult.InvalidEmailFormat);
+                Debug.Log($"[DummyPlayerLoginApi] RegisterWithEmail: Email inválido - {email}");
+                RegisterWithEmailCallback?.Invoke(RegisterResult.InvalidEmail, message, null);
+                return;
+            }
+
+            // Validar contraseña
+            if (!CredentialValidator.IsValidPasswordFormat(password))
+            {
+                var message = CredentialValidator.GetValidationMessage(CredentialValidationResult.InvalidPasswordFormat);
+                Debug.Log($"[DummyPlayerLoginApi] RegisterWithEmail: Contraseña inválida");
+                RegisterWithEmailCallback?.Invoke(RegisterResult.InvalidPassword, message, null);
+                return;
+            }
+
+            // Verificar si ya existe
+            bool emailExists = PlayerRepository.EmailExists(email);
+            Debug.Log($"[DummyPlayerLoginApi] RegisterWithEmail: EmailExists={emailExists} para {email}");
+            
+            if (emailExists)
+            {
+                // Si el email existe, verificar si tiene contraseña
+                var existingPlayer = PlayerRepository.GetPlayerByEmail(email);
+                if (existingPlayer != null && string.IsNullOrEmpty(existingPlayer.Password))
+                {
+                    // Usuario existe pero sin contraseña - actualizar contraseña
+                    Debug.Log($"[DummyPlayerLoginApi] RegisterWithEmail: Usuario existe sin password, actualizando...");
+                    if (PlayerRepository.UpdatePasswordByEmail(email, password))
+                    {
+                        // Recargar datos actualizados
+                        var updatedPlayer = PlayerRepository.GetPlayerByEmail(email);
+                        RegisterWithEmailCallback?.Invoke(RegisterResult.Success, "Contraseña establecida exitosamente.", updatedPlayer);
+                        return;
+                    }
+                    else
+                    {
+                        RegisterWithEmailCallback?.Invoke(RegisterResult.Error, "Error al actualizar contraseña", null);
+                        return;
+                    }
+                }
+                
+                Debug.Log($"[DummyPlayerLoginApi] RegisterWithEmail: Email ya existe con contraseña");
+                RegisterWithEmailCallback?.Invoke(RegisterResult.EmailAlreadyExists, "Este email ya está registrado", null);
+                return;
+            }
+
+            // Crear cuenta con contraseña
+            var player = PlayerRepository.CreatePlayerWithEmailAndPassword(email, password);
+
+            if (player != null)
+            {
+                Debug.Log($"[DummyPlayerLoginApi] Cuenta creada con email y contraseña: {email}");
+                RegisterWithEmailCallback?.Invoke(RegisterResult.Success, "Cuenta creada exitosamente.", player);
             }
             else
             {

@@ -210,12 +210,14 @@ namespace Scripts.Services.PlayerLoginApi
         }
 
         /// <summary>
-        /// Verifica si el jugador ha completado el registro (tiene nombre y contraseña).
+        /// Verifica si el jugador ha completado el registro (tiene contraseña establecida).
+        /// En el flujo v2, el nombre del personaje se maneja en CharacterViewController,
+        /// por lo que solo verificamos que tenga contraseña.
         /// </summary>
-        /// <returns>True si el registro está completo.</returns>
+        /// <returns>True si el registro está completo (tiene contraseña).</returns>
         public bool IsRegistrationComplete()
         {
-            return !string.IsNullOrEmpty(playerName) && !string.IsNullOrEmpty(password);
+            return !string.IsNullOrEmpty(password);
         }
 
         /// <summary>

@@ -32,6 +32,15 @@ namespace Scripts.Core.Domain.Interfaces
         IPlayerCredentials CreatePlayerWithEmail(string email);
 
         /// <summary>
+        /// Registra un nuevo jugador con email y contraseña.
+        /// El nombre y clase se asignarán después en CharacterViewController.
+        /// </summary>
+        /// <param name="email">Email único del jugador.</param>
+        /// <param name="password">Contraseña del jugador.</param>
+        /// <returns>Las credenciales del jugador recién creado o null si el email ya existe.</returns>
+        IPlayerCredentials CreatePlayerWithEmailAndPassword(string email, string password);
+
+        /// <summary>
         /// Completa el registro de un jugador agregando nombre, contraseña y clase de personaje.
         /// </summary>
         /// <param name="email">Email del jugador.</param>
@@ -80,6 +89,15 @@ namespace Scripts.Core.Domain.Interfaces
         /// <param name="newPassword">Nueva contraseña.</param>
         /// <returns>True si la actualización fue exitosa.</returns>
         bool UpdatePassword(string playerName, string newPassword);
+
+        /// <summary>
+        /// Actualiza la contraseña de un jugador existente por email.
+        /// Útil para usuarios que existen pero no tienen contraseña establecida.
+        /// </summary>
+        /// <param name="email">Email del jugador.</param>
+        /// <param name="newPassword">Nueva contraseña.</param>
+        /// <returns>True si la actualización fue exitosa.</returns>
+        bool UpdatePasswordByEmail(string email, string newPassword);
 
         #endregion
 

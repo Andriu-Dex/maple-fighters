@@ -16,14 +16,24 @@ namespace Scripts.UI.CharacterSelection
         private void Awake()
         {
             uiFadeAnimation = GetComponent<UIFadeAnimation>();
-            uiFadeAnimation.FadeInCompleted += OnFadeInCompleted;
-            uiFadeAnimation.FadeOutCompleted += OnFadeOutCompleted;
+            if (uiFadeAnimation != null)
+            {
+                uiFadeAnimation.FadeInCompleted += OnFadeInCompleted;
+                uiFadeAnimation.FadeOutCompleted += OnFadeOutCompleted;
+            }
+            else
+            {
+                Debug.LogWarning("[LoadingText] UIFadeAnimation no encontrado en el objeto");
+            }
         }
 
         private void OnDestroy()
         {
-            uiFadeAnimation.FadeInCompleted -= OnFadeInCompleted;
-            uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+            if (uiFadeAnimation != null)
+            {
+                uiFadeAnimation.FadeInCompleted -= OnFadeInCompleted;
+                uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+            }
         }
 
         private void OnFadeInCompleted()

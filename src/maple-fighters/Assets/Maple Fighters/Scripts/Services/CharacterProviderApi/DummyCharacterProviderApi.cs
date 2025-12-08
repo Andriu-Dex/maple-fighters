@@ -51,6 +51,12 @@ namespace Scripts.Services.CharacterProviderApi
 
         private void OnDestroy()
         {
+            // Limpiar la instancia singleton
+            if (instance == this)
+            {
+                instance = null;
+            }
+            
             ApiProvider.RemoveCharacterProviderApi();
         }
 
@@ -141,6 +147,9 @@ namespace Scripts.Services.CharacterProviderApi
         {
             var statusCode = (long)StatusCodes.Ok;
             var json = LoadCharactersJson();
+            
+            // Lista para almacenar solo los personajes de este usuario
+            var filteredCharacters = new List<CharacterData>();
 
             var characterDataCollection = JsonUtility.FromJson<CharacterDataCollection>(json);
             if (characterDataCollection != null)
@@ -149,25 +158,39 @@ namespace Scripts.Services.CharacterProviderApi
 
                 foreach (var character in characterItems)
                 {
-                    if (characters.ContainsKey(character.id))
+                    // FASE 2: Filtrar solo personajes de este usuario
+                    if (character.userid != userid)
                     {
                         continue;
                     }
-
-                    characters.Add(character.id, new CharacterData()
+                    
+                    // Agregar a la lista filtrada
+                    filteredCharacters.Add(character);
+                    
+                    // Agregar al diccionario en memoria si no existe
+                    if (!characters.ContainsKey(character.id))
                     {
-                        id = character.id,
-                        userid = character.userid,
-                        charactername = character.charactername,
-                        characterlevel = character.characterlevel,
-                        characterexperience = character.characterexperience,
-                        index = character.index,
-                        classindex = character.classindex
-                    });
+                        characters.Add(character.id, new CharacterData()
+                        {
+                            id = character.id,
+                            userid = character.userid,
+                            charactername = character.charactername,
+                            characterlevel = character.characterlevel,
+                            characterexperience = character.characterexperience,
+                            index = character.index,
+                            classindex = character.classindex
+                        });
+                    }
                 }
             }
 
-            GetCharactersCallback?.Invoke(statusCode, json);
+            // Devolver JSON filtrado con solo los personajes de este usuario
+            var filteredCollection = new CharacterDataCollection(filteredCharacters.ToArray());
+            var filteredJson = filteredCollection.ToString();
+            
+            Debug.Log($"[DummyCharacterProviderApi] GetCharacters para userId={userid}: {filteredCharacters.Count} personajes encontrados");
+
+            GetCharactersCallback?.Invoke(statusCode, filteredJson);
         }
 
         private void SaveCharacterCollection()

@@ -13,17 +13,25 @@ public class ChatController : MonoBehaviour {
 
     void OnEnable()
     {
-        ChatInputField.onSubmit.AddListener(AddToChatOutput);
+        if (ChatInputField != null)
+        {
+            ChatInputField.onSubmit.AddListener(AddToChatOutput);
+        }
     }
 
     void OnDisable()
     {
-        ChatInputField.onSubmit.RemoveListener(AddToChatOutput);
+        if (ChatInputField != null)
+        {
+            ChatInputField.onSubmit.RemoveListener(AddToChatOutput);
+        }
     }
 
 
     void AddToChatOutput(string newText)
     {
+        if (ChatInputField == null) return;
+        
         // Clear Input Field
         ChatInputField.text = string.Empty;
 
@@ -45,7 +53,10 @@ public class ChatController : MonoBehaviour {
         ChatInputField.ActivateInputField();
 
         // Set the scrollbar to the bottom when next text is submitted.
-        ChatScrollbar.value = 0;
+        if (ChatScrollbar != null)
+        {
+            ChatScrollbar.value = 0;
+        }
     }
 
 }

@@ -10,6 +10,8 @@ namespace Scripts.UI.ScreenFade
         public event Action FadeInCompleted;
         public event Action FadeOutCompleted;
 
+        private UIFadeAnimation uiFadeAnimation;
+
         private void Start()
         {
             SubscribeToUIFadeAnimation();
@@ -22,16 +24,21 @@ namespace Scripts.UI.ScreenFade
 
         private void SubscribeToUIFadeAnimation()
         {
-            var uiFadeAnimation = GetComponent<UIFadeAnimation>();
-            uiFadeAnimation.FadeInCompleted += OnFadeInCompleted;
-            uiFadeAnimation.FadeOutCompleted += OnFadeOutCompleted;
+            uiFadeAnimation = GetComponent<UIFadeAnimation>();
+            if (uiFadeAnimation != null)
+            {
+                uiFadeAnimation.FadeInCompleted += OnFadeInCompleted;
+                uiFadeAnimation.FadeOutCompleted += OnFadeOutCompleted;
+            }
         }
 
         private void UnsubscribeFromUIFadeAnimation()
         {
-            var uiFadeAnimation = GetComponent<UIFadeAnimation>();
-            uiFadeAnimation.FadeInCompleted -= OnFadeInCompleted;
-            uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+            if (uiFadeAnimation != null)
+            {
+                uiFadeAnimation.FadeInCompleted -= OnFadeInCompleted;
+                uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+            }
         }
 
         private void OnFadeInCompleted()

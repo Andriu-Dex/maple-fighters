@@ -35,6 +35,8 @@ namespace Scripts.UI.Notice
         [SerializeField]
         private Button okButton;
 
+        private UIFadeAnimation uiFadeAnimation;
+
         private void Start()
         {
             okButton?.onClick.AddListener(OnOkButtonClicked);
@@ -44,8 +46,11 @@ namespace Scripts.UI.Notice
 
         private void SubscribeToUIFadeAnimation()
         {
-            var uiFadeAnimation = GetComponent<UIFadeAnimation>();
-            uiFadeAnimation.FadeOutCompleted += OnFadeOutCompleted;
+            uiFadeAnimation = GetComponent<UIFadeAnimation>();
+            if (uiFadeAnimation != null)
+            {
+                uiFadeAnimation.FadeOutCompleted += OnFadeOutCompleted;
+            }
         }
 
         private void OnDestroy()
@@ -57,8 +62,10 @@ namespace Scripts.UI.Notice
 
         private void UnsubscribeFromUIFadeAnimation()
         {
-            var uiFadeAnimation = GetComponent<UIFadeAnimation>();
-            uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+            if (uiFadeAnimation != null)
+            {
+                uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+            }
         }
 
         private void OnFadeOutCompleted()

@@ -97,14 +97,20 @@ namespace Scripts.UI.PlayerLogin
             {
                 userMetadata.IsLoggedIn = true;
                 
+                // FASE 1: Establecer el userId desde las credenciales del login
+                // Esto vincula los personajes a la cuenta del usuario (no a un ID aleatorio)
+                var userId = playerData?.Id ?? email.ToLowerInvariant();
+                userMetadata.SetUserIdFromCredentials(userId);
+                
+                // Configurar datos adicionales del usuario
                 userMetadata.UserData = Scripts.Services.AuthenticatorApi.UserData.Create(
-                    playerData?.Id ?? email.ToLowerInvariant(),
+                    userId,
                     email,
                     playerName,
                     playerData?.CharacterClass
                 );
 
-                Debug.Log($"[PlayerLoginIntegration] UserMetadata configurado: {playerName} ({email})");
+                Debug.Log($"[PlayerLoginIntegration] UserMetadata configurado con userId: {userId} para {playerName} ({email})");
             }
             else
             {
@@ -130,11 +136,13 @@ namespace Scripts.UI.PlayerLogin
             else
             {
                 // Activar CharacterViewController si está en la misma escena
-                // En v2, el personaje ya fue seleccionado durante el login
+                // FASE 3: Usar flujo inteligente que dirige automáticamente
+                // - Sin personaje -> Crear personaje
+                // - Con personaje -> Ir al juego
                 if (characterViewController != null)
                 {
                     characterViewController.gameObject.SetActive(true);
-                    characterViewController.ShowCharacterSelection();
+                    characterViewController.ShowCharacterSelectionSmart();
                 }
             }
         }
@@ -157,19 +165,20 @@ namespace Scripts.UI.PlayerLogin
 
         /// <summary>
         /// Cierra sesión del jugador actual y muestra login.
+        /// Limpia el userId para que el siguiente usuario no vea datos anteriores.
         /// </summary>
         public void Logout()
         {
             var userMetadata = FindObjectOfType<UserMetadata>();
             if (userMetadata != null)
             {
-                userMetadata.IsLoggedIn = false;
-                userMetadata.UserData = null;
+                // Usar ClearSession() para limpiar completamente la sesión
+                userMetadata.ClearSession();
             }
 
             loginController?.Logout();
 
-            Debug.Log("[PlayerLoginIntegration] Sesión cerrada");
+            Debug.Log("[PlayerLoginIntegration] Sesión cerrada y datos de usuario limpiados");
         }
 
         /// <summary>

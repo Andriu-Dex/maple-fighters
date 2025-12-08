@@ -202,6 +202,15 @@ namespace Scripts.Services.PlayerLoginApi
         void CreateAccountWithEmail(string email);
 
         /// <summary>
+        /// Registra un nuevo jugador con email y contraseña.
+        /// Crea la cuenta lista para seleccionar personaje en CharacterViewController.
+        /// El resultado se entrega via RegisterWithEmailCallback.
+        /// </summary>
+        /// <param name="email">Email del jugador.</param>
+        /// <param name="password">Contraseña.</param>
+        void RegisterWithEmail(string email, string password);
+
+        /// <summary>
         /// Completa el registro de un jugador existente.
         /// Agrega nombre, contraseña y clase de personaje.
         /// El resultado se entrega via RegisterWithEmailCallback.

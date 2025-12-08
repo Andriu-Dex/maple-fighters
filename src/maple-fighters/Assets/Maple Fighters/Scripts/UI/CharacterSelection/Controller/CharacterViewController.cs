@@ -25,8 +25,8 @@ namespace Scripts.UI.CharacterSelection
 
         [Header("Startup Settings")]
         [SerializeField]
-        [Tooltip("Si es false, no se muestra automáticamente al iniciar. Usar ShowCharacterSelection() para mostrar manualmente.")]
-        private bool showOnStart = true;
+        [Tooltip("Si es false, no se muestra automáticamente al iniciar. Usar ShowCharacterSelection() para mostrar manualmente después del login.")]
+        private bool showOnStart = false;
 
         private ILoadingView loadingView;
         private IChooseCharacterView chooseCharacterView;
@@ -41,6 +41,13 @@ namespace Scripts.UI.CharacterSelection
 
         private CharacterViewInteractor characterViewInteractor;
         private ScreenFadeController screenFadeController;
+        
+        /// <summary>
+        /// Si true, usa flujo inteligente:
+        /// - Sin personajes -> Ir directo a crear personaje
+        /// - Con personajes -> Ir directo al juego con el primero
+        /// </summary>
+        private bool useSmartFlow = false;
 
         private void Awake()
         {
@@ -50,6 +57,18 @@ namespace Scripts.UI.CharacterSelection
 
         private void Start()
         {
+            // Si hay un PlayerLoginController o PlayerLoginIntegration en la escena,
+            // NO iniciar automáticamente - esperar a que el login llame a ShowCharacterSelection()
+            var loginController = FindObjectOfType<Scripts.UI.PlayerLogin.PlayerLoginController>();
+            var loginIntegration = FindObjectOfType<Scripts.UI.PlayerLogin.PlayerLoginIntegration>();
+            
+            if (loginController != null || loginIntegration != null)
+            {
+                Debug.Log("[CharacterViewController] Sistema de login detectado, esperando login para iniciar...");
+                return; // No auto-iniciar, esperar al login
+            }
+            
+            // Solo auto-iniciar si showOnStart está activo Y no hay sistema de login
             if (showOnStart)
             {
                 CreateAndShowCharacterView();
@@ -57,11 +76,25 @@ namespace Scripts.UI.CharacterSelection
         }
 
         /// <summary>
-        /// Inicia el flujo de selección de personajes.
-        /// Llamar después de un login exitoso.
+        /// Inicia el flujo de selección de personajes (modo clásico).
+        /// Siempre muestra el menú de opciones (Choose/Create/Delete).
         /// </summary>
         public void ShowCharacterSelection()
         {
+            useSmartFlow = false;
+            CreateAndShowCharacterView();
+        }
+        
+        /// <summary>
+        /// Inicia el flujo inteligente de selección de personajes.
+        /// FASE 3: Dirige automáticamente según si tiene o no personaje:
+        /// - Sin personajes -> Va directo a crear personaje (selección de clase)
+        /// - Con personajes -> Va directo al juego con el primer personaje
+        /// </summary>
+        public void ShowCharacterSelectionSmart()
+        {
+            useSmartFlow = true;
+            Debug.Log("[CharacterViewController] Iniciando flujo inteligente...");
             CreateAndShowCharacterView();
         }
 
@@ -151,10 +184,16 @@ namespace Scripts.UI.CharacterSelection
 
         private void SubscribeToLoadingView()
         {
-            if (loadingView != null)
+            if (loadingView != null && loadingView.LoadingAnimation != null)
             {
                 loadingView.LoadingAnimation.Finished +=
                     OnLoadingAnimationFinished;
+            }
+            else
+            {
+                Debug.LogWarning("[CharacterViewController] loadingView o LoadingAnimation es null, ejecutando flujo directo...");
+                // Fallback: ejecutar directamente sin animación
+                OnLoadingAnimationFinished();
             }
         }
 
@@ -233,7 +272,7 @@ namespace Scripts.UI.CharacterSelection
 
         private void UnsubscribeFromLoadingView()
         {
-            if (loadingView != null)
+            if (loadingView != null && loadingView.LoadingAnimation != null)
             {
                 loadingView.LoadingAnimation.Finished -=
                     OnLoadingAnimationFinished;
@@ -272,8 +311,149 @@ namespace Scripts.UI.CharacterSelection
 
         public void OnAfterCharacterReceived()
         {
+            Debug.Log($"[CharacterViewController] OnAfterCharacterReceived - useSmartFlow={useSmartFlow}");
+            
             HideLoadingView();
+            
+            // FASE 3: Flujo inteligente
+            if (useSmartFlow)
+            {
+                HandleSmartFlow();
+                return;
+            }
+            
+            // Flujo clásico: mostrar menú de opciones
             ShowChooseCharacterView();
+        }
+        
+        /// <summary>
+        /// FASE 3: Maneja el flujo inteligente post-login.
+        /// </summary>
+        private void HandleSmartFlow()
+        {
+            // Verificar si tiene personajes
+            bool hasCharacter = HasAnyCharacter();
+            
+            Debug.Log($"[CharacterViewController] HandleSmartFlow - hasCharacter={hasCharacter}");
+            
+            if (hasCharacter)
+            {
+                // Usuario tiene personaje -> Ir directo al juego con el primero
+                Debug.Log("[CharacterViewController] Flujo inteligente: Usuario tiene personaje, yendo al juego...");
+                GoToGameWithFirstCharacter();
+            }
+            else
+            {
+                // Usuario no tiene personaje -> Ir directo a crear
+                Debug.Log("[CharacterViewController] Flujo inteligente: Usuario nuevo, yendo a crear personaje...");
+                GoToCreateCharacter();
+            }
+        }
+        
+        /// <summary>
+        /// Verifica si hay algún personaje VÁLIDO en la colección.
+        /// Un personaje válido debe tener ID > 0 y nombre no vacío.
+        /// </summary>
+        private bool HasAnyCharacter()
+        {
+            if (characterViewCollection == null)
+            {
+                Debug.Log("[CharacterViewController] HasAnyCharacter: characterViewCollection es null");
+                return false;
+            }
+            
+            var characters = characterViewCollection.Value.GetAll();
+            if (characters == null)
+            {
+                Debug.Log("[CharacterViewController] HasAnyCharacter: GetAll() retornó null");
+                return false;
+            }
+            
+            foreach (var character in characters)
+            {
+                // Verificar que sea un personaje VÁLIDO (no solo que exista el objeto)
+                if (character != null && 
+                    character.Id > 0 && 
+                    !string.IsNullOrEmpty(character.CharacterName))
+                {
+                    Debug.Log($"[CharacterViewController] HasAnyCharacter: Encontrado personaje válido - ID:{character.Id}, Name:{character.CharacterName}");
+                    return true;
+                }
+            }
+            
+            Debug.Log("[CharacterViewController] HasAnyCharacter: No hay personajes válidos en la colección");
+            return false;
+        }
+        
+        /// <summary>
+        /// Va directo al juego con el primer personaje disponible.
+        /// Para usuarios que ya tienen personaje.
+        /// </summary>
+        private void GoToGameWithFirstCharacter()
+        {
+            // Buscar el primer personaje disponible
+            if (characterViewCollection == null)
+            {
+                GoToCreateCharacter();
+                return;
+            }
+            
+            var characters = characterViewCollection.Value.GetAll();
+            if (characters != null)
+            {
+                int index = 0;
+                foreach (var character in characters)
+                {
+                    // Verificar que sea un personaje VÁLIDO (ID > 0, nombre no vacío)
+                    if (character != null && 
+                        character.Id > 0 && 
+                        !string.IsNullOrEmpty(character.CharacterName))
+                    {
+                        characterIndex = index;
+                        
+                        var characterId = character.Id;
+                        var characterClass = (byte)character.CharacterClass;
+                        var characterName = character.CharacterName;
+                        var characterLevel = character.CharacterLevel;
+                        var characterExperience = character.CharacterExperience;
+
+                        characterViewInteractor.UpdateCharacterData(characterId, characterClass, characterName, characterLevel, characterExperience);
+
+                        Debug.Log($"[CharacterViewController] Auto-seleccionando personaje: {characterName} (ID: {characterId})");
+
+                        if (showGameServerBrowser)
+                        {
+                            ShowGameServerBrowserWindow();
+                        }
+                        else
+                        {
+                            LoadLobby();
+                        }
+                        
+                        return;
+                    }
+                    index++;
+                }
+            }
+            
+            // Si no encontró personaje válido, ir a crear
+            Debug.LogWarning("[CharacterViewController] No se encontró personaje válido, redirigiendo a crear...");
+            GoToCreateCharacter();
+        }
+        
+        /// <summary>
+        /// Va directo a la pantalla de selección de clase para crear personaje.
+        /// Para usuarios nuevos sin personaje.
+        /// </summary>
+        private void GoToCreateCharacter()
+        {
+            // Usar el primer slot disponible
+            characterIndex = 0;
+            
+            ShowChooseCharacterView();
+            ShowCharacterSelectionWindow();
+            
+            Debug.Log("[CharacterViewController] Mostrando selección de clase para crear personaje");
         }
 
         public void OnCharacterDeletionSucceed()
@@ -323,6 +503,8 @@ namespace Scripts.UI.CharacterSelection
 
         private void OnLoadingAnimationFinished()
         {
+            Debug.Log("[CharacterViewController] OnLoadingAnimationFinished - Creando vistas y cargando personajes...");
+            
             UnsubscribeFromLoadingView();
 
             CreateChooseCharacterView();
@@ -338,7 +520,12 @@ namespace Scripts.UI.CharacterSelection
 
         public void LoadCharacters()
         {
+            Debug.Log("[CharacterViewController] LoadCharacters - Solicitando personajes del servidor...");
+            
             RemoveAllCharacterImages();
+            
+            // Limpiar la colección de personajes para evitar datos residuales
+            characterViewCollection = null;
 
             characterViewInteractor.GetCharacters();
         }

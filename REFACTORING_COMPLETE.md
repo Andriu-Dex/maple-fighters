@@ -840,3 +840,578 @@ Player Login System (GameObject)
 | Principios SOLID aplicados | Parcial | Todos |
 
 ---
+
+## 🆕 FASE 7: Sistema de Login V2 - Vinculación UserId con Cuenta
+
+### 7.1 Problema Identificado
+
+El sistema original tenía un problema crítico: **el `userId` no estaba vinculado a la cuenta del usuario**.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     FLUJO ANTERIOR (INCORRECTO)                  │
+└─────────────────────────────────────────────────────────────────┘
+
+1. UserMetadata genera userId = "ABC123" al arrancar (aleatorio)
+2. Usuario 1 hace login con email "user1@test.com"
+3. Crea personaje → Se guarda con userId="ABC123"
+4. Usuario 2 hace login con "user2@test.com"
+5. CharacterProviderApi busca personajes con userId="ABC123"
+6. ¡Usuario 2 VE el personaje de Usuario 1! ← ERROR
+
+RESULTADO: Todos los usuarios en la misma máquina compartían personajes
+```
+
+### 7.2 Solución Implementada
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     FLUJO CORREGIDO                              │
+└─────────────────────────────────────────────────────────────────┘
+
+1. Usuario hace login con email "user1@test.com"
+2. Sistema obtiene playerData.Id (GUID único de la cuenta)
+3. UserMetadata.SetUserIdFromCredentials(playerData.Id)
+4. CharacterProviderApi.GetCharacters(userId) filtra por ese ID
+5. Solo se muestran personajes de ESE usuario específico
+6. Flujo inteligente: sin personaje → crear, con personaje → jugar
+```
+
+### 7.3 Archivos Modificados - Fase 7
+
+#### `UserMetadata.cs`
+**Cambios:**
+- Agregado campo `private string loggedInUserId`
+- Nuevo método `SetUserIdFromCredentials(string credentialsId)` - establece el userId desde la cuenta
+- Nuevo método `ClearSession()` - limpia todos los datos de sesión al cerrar
+- Modificado `GetUserId()` - prioriza el userId de la cuenta logueada
+
+```csharp
+// NUEVO: Campo para almacenar userId de la cuenta logueada
+private string loggedInUserId;
+
+// NUEVO: Establecer userId desde credenciales de login
+public void SetUserIdFromCredentials(string credentialsId)
+{
+    loggedInUserId = credentialsId;
+    UserData = new UserData { id = credentialsId };
+    Debug.Log($"[UserMetadata] UserId establecido desde login: {credentialsId}");
+}
+
+// NUEVO: Limpiar sesión completa
+public void ClearSession()
+{
+    loggedInUserId = null;
+    UserData = default;
+    CharacterData = default;
+    Debug.Log("[UserMetadata] Sesión limpiada");
+}
+```
+
+#### `PlayerLoginIntegration.cs`
+**Cambios:**
+- Modificado `OnLoginSuccessful()` - ahora establece userId y llama a flujo inteligente
+- Modificado `Logout()` - ahora llama a `ClearSession()` para limpiar datos
+- Integración con `CharacterViewController.ShowCharacterSelectionSmart()`
+
+```csharp
+private void OnLoginSuccessful(string email, string playerName, IPlayerCredentials playerData)
+{
+    // 1. Establecer el userId correcto ANTES de mostrar personajes
+    var userMetadata = FindObjectOfType<UserMetadata>();
+    if (userMetadata != null && playerData != null)
+    {
+        userMetadata.SetUserIdFromCredentials(playerData.Id);
+        Debug.Log($"[PlayerLoginIntegration] UserMetadata configurado con userId: {playerData.Id}");
+    }
+    
+    // 2. Mostrar selección de personajes con flujo inteligente
+    if (characterViewController != null)
+    {
+        characterViewController.ShowCharacterSelectionSmart(); // ← NUEVO
+    }
+}
+```
+
+#### `DummyCharacterProviderApi.cs`
+**Cambios:**
+- Modificado `GetCharacters(string userid)` - ahora filtra personajes usando LINQ
+- Solo devuelve personajes donde `character.userid == userid`
+
+```csharp
+public void GetCharacters(string userid)
+{
+    LoadCharactersFromStorage();
+    
+    // FILTRAR: Solo personajes de este usuario específico
+    var userCharacters = characterItems
+        .Where(c => c.userid == userid)
+        .ToArray();
+    
+    Debug.Log($"[DummyCharacterProviderApi] GetCharacters para userId={userid}: {userCharacters.Length} personajes encontrados");
+    
+    var filteredCollection = new CharacterDataCollection(userCharacters);
+    var filteredJson = filteredCollection.ToString();
+    
+    GetCharactersCallback?.Invoke((long)StatusCodes.Ok, filteredJson);
+}
+```
+
+#### `CharacterViewController.cs`
+**Cambios principales:**
+
+1. **Nuevo método `ShowCharacterSelectionSmart()`** - Inicia flujo inteligente post-login
+2. **Nuevo método `HandleSmartFlow()`** - Decide si crear personaje o ir al juego
+3. **Nuevo método `HasAnyCharacter()`** - Verifica si hay personajes válidos (ID > 0, nombre no vacío)
+4. **Nuevo método `GoToGameWithFirstCharacter()`** - Auto-selecciona primer personaje y va al juego
+5. **Nuevo método `GoToCreateCharacter()`** - Va directo a pantalla de creación
+6. **Modificado `Start()`** - Detecta si hay sistema de login presente
+7. **Modificado `LoadCharacters()`** - Limpia `characterViewCollection = null` antes de cargar
+
+```csharp
+/// <summary>
+/// Inicia el flujo inteligente de selección de personajes post-login.
+/// Determina automáticamente si el usuario debe crear un personaje o ir al juego.
+/// </summary>
+public void ShowCharacterSelectionSmart()
+{
+    useSmartFlow = true;
+    CreateAndShowCharacterView();
+}
+
+/// <summary>
+/// Maneja el flujo inteligente después de recibir los personajes.
+/// </summary>
+private void HandleSmartFlow()
+{
+    bool hasCharacter = HasAnyCharacter();
+    Debug.Log($"[CharacterViewController] HandleSmartFlow - hasCharacter={hasCharacter}");
+    
+    if (hasCharacter)
+    {
+        Debug.Log("[CharacterViewController] Flujo inteligente: Usuario tiene personaje, yendo al juego...");
+        GoToGameWithFirstCharacter();
+    }
+    else
+    {
+        Debug.Log("[CharacterViewController] Flujo inteligente: Usuario nuevo, yendo a crear personaje...");
+        GoToCreateCharacter();
+    }
+}
+
+/// <summary>
+/// Verifica si hay algún personaje VÁLIDO en la colección.
+/// Un personaje válido debe tener ID > 0 y nombre no vacío.
+/// </summary>
+private bool HasAnyCharacter()
+{
+    if (characterViewCollection == null) return false;
+    
+    foreach (var character in characterViewCollection.Value.GetAll())
+    {
+        // Verificar que sea un personaje VÁLIDO (no solo que exista el objeto)
+        if (character != null && 
+            character.Id > 0 && 
+            !string.IsNullOrEmpty(character.CharacterName))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+```
+
+### 7.4 Corrección de Errores de Escena
+
+Durante las pruebas se identificaron varios errores al cambiar de escena:
+
+#### Problema 1: "Some objects were not cleaned up when closing the scene"
+**Causa:** Singletons estáticos mantenían referencias después de destruirse.
+**Solución:** Limpiar `instance = null` en `OnDestroy()` de todos los singletons.
+
+#### Problema 2: "Connection to the game server has been lost"
+**Causa:** `DummyGameApi.OnDestroy()` disparaba `Disconnected` con código "Normal", mostrando mensaje innecesario.
+**Solución:** `GameServerDisconnectionHandler` ahora ignora desconexión "Normal".
+
+#### Problema 3: MissingReferenceException en EntityIdentifier
+**Causa:** `EntityRepository` mantenía referencias a GameObjects destruidos.
+**Solución:** `EntityContainer.OnDisable()` ahora llama a `entityRepository.Clear()`.
+
+### 7.5 Archivos Modificados para Corrección de Errores
+
+#### `GameServerDisconnectionHandler.cs`
+```csharp
+private void OnDisconnected(WebSocketCloseCode code)
+{
+    Debug.Log($"Game server disconnection reason: {code}");
+
+    // NUEVO: Ignorar desconexión normal (esperada al cambiar de escena)
+    if (code == WebSocketCloseCode.Normal)
+    {
+        return;
+    }
+    
+    // Solo mostrar mensaje para desconexiones inesperadas
+    NoticeUtils.ShowNotice(NoticeMessages.GameServer.ConnectionClosed, OnClicked);
+}
+```
+
+#### `UICreator.cs`
+```csharp
+// NUEVO: Limpiar singleton al destruir
+private void OnDestroy()
+{
+    if (instance == this)
+    {
+        instance = null;
+    }
+    uiCanvas = null;
+}
+```
+
+#### `NoticeController.cs`
+```csharp
+private void OnDestroy()
+{
+    UnsubscribeFromNoticeWindow();
+    
+    // NUEVO: Destruir la ventana para evitar objetos huérfanos
+    if (noticeView != null)
+    {
+        var viewGameObject = (noticeView as MonoBehaviour)?.gameObject;
+        if (viewGameObject != null)
+        {
+            Destroy(viewGameObject);
+        }
+        noticeView = null;
+    }
+}
+```
+
+#### `EntityContainer.cs`
+```csharp
+private void OnDisable()
+{
+    gameApi?.SceneEntered?.RemoveListener(OnSceneEntered);
+    gameApi?.GameObjectsAdded?.RemoveListener(OnGameObjectsAdded);
+    gameApi?.GameObjectsRemoved?.RemoveListener(OnGameObjectsRemoved);
+    
+    // NUEVO: Limpiar repositorio al cambiar de escena
+    entityRepository?.Clear();
+    localCollection?.Clear();
+    localEntity = null;
+    
+    // NUEVO: Limpiar singleton
+    if (instance == this)
+    {
+        instance = null;
+    }
+}
+```
+
+#### `DummyGameApi.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Limpiar singleton
+    if (instance == this)
+    {
+        instance = null;
+    }
+    
+    ApiProvider.RemoveGameApiProvider();
+    Disconnected?.Invoke(WebSocketCloseCode.Normal);
+}
+```
+
+#### `DummyCharacterProviderApi.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Limpiar singleton
+    if (instance == this)
+    {
+        instance = null;
+    }
+    
+    ApiProvider.RemoveCharacterProviderApi();
+}
+```
+
+#### `DummyGameProviderApi.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Limpiar singleton
+    if (instance == this)
+    {
+        instance = null;
+    }
+    
+    ApiProvider.RemoveGameProviderApi();
+}
+```
+
+#### `DummyChatApi.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Limpiar singleton
+    if (instance == this)
+    {
+        instance = null;
+    }
+    
+    ApiProvider.RemoveChatApiProvider();
+}
+```
+
+### 7.6 Correcciones de NullReferenceException
+
+#### `LoadingText.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Verificar null antes de desuscribir
+    if (uiFadeAnimation != null)
+    {
+        uiFadeAnimation.FadeInCompleted -= OnFadeInCompleted;
+    }
+}
+```
+
+#### `ScreenFadeImage.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Verificar null antes de desuscribir
+    if (uiFadeAnimation != null)
+    {
+        uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+    }
+}
+```
+
+#### `NoticeWindow.cs`
+```csharp
+private void OnDestroy()
+{
+    // NUEVO: Verificar null antes de desuscribir
+    if (uiFadeAnimation != null)
+    {
+        uiFadeAnimation.FadeOutCompleted -= OnFadeOutCompleted;
+    }
+}
+```
+
+#### `ChatController.cs` (TextMesh Pro)
+```csharp
+private void Start()
+{
+    // NUEVO: Verificar null antes de suscribir
+    if (chatInputField != null)
+    {
+        chatInputField.onEndEdit.AddListener(OnChatInputFieldEndEdit);
+    }
+    
+    if (chatScrollbar != null)
+    {
+        chatScrollbar.onValueChanged.AddListener(OnChatScrollbarValueChanged);
+    }
+}
+
+private void OnDestroy()
+{
+    // NUEVO: Verificar null antes de desuscribir
+    if (chatInputField != null)
+    {
+        chatInputField.onEndEdit.RemoveListener(OnChatInputFieldEndEdit);
+    }
+    
+    if (chatScrollbar != null)
+    {
+        chatScrollbar.onValueChanged.RemoveListener(OnChatScrollbarValueChanged);
+    }
+}
+```
+
+### 7.7 Flujo Final del Sistema Login V2
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FLUJO LOGIN V2 COMPLETO                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+INICIO
+   │
+   ▼
+┌─────────────────┐
+│  Pantalla Login │
+│ "Ingresa email" │
+└─────────────────┘
+   │
+   ▼
+┌─────────────────┐     ┌──────────────────┐
+│  CheckEmail()   │────►│ ¿Email existe?   │
+└─────────────────┘     └──────────────────┘
+                               │
+              ┌────────────────┴────────────────┐
+              │ NO                              │ SÍ
+              ▼                                 ▼
+     ┌─────────────────┐               ┌─────────────────┐
+     │"Crear contraseña"│               │"Ingresa password"│
+     └─────────────────┘               └─────────────────┘
+              │                                 │
+              ▼                                 ▼
+     ┌─────────────────┐               ┌─────────────────┐
+     │RegisterWithEmail│               │  LoginByEmail   │
+     │ (crea cuenta    │               │ (valida pass)   │
+     │  con Id único)  │               └─────────────────┘
+     └─────────────────┘                       │
+              │                                 │
+              └────────────┬────────────────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │   LOGIN EXITOSO         │
+              │ playerData.Id = "xyz"   │
+              └─────────────────────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │ UserMetadata.           │
+              │ SetUserIdFromCredentials│
+              │ (playerData.Id)         │
+              └─────────────────────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │ CharacterViewController.│
+              │ ShowCharacterSelection  │
+              │ Smart()                 │
+              └─────────────────────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │ GetCharacters(userId)   │
+              │ FILTRADO por userId     │
+              └─────────────────────────┘
+                           │
+              ┌────────────┴────────────┐
+              │ 0 personajes           │ 1+ personajes
+              ▼                        ▼
+     ┌─────────────────┐      ┌─────────────────┐
+     │ GoToCreate      │      │ GoToGameWith    │
+     │ Character()     │      │ FirstCharacter()│
+     └─────────────────┘      └─────────────────┘
+              │                        │
+              ▼                        ▼
+     ┌─────────────────┐      ┌─────────────────┐
+     │ Selección clase │      │ Auto-selecciona │
+     │ Knight/Archer/  │      │ primer personaje│
+     │ Wizard          │      │ válido          │
+     └─────────────────┘      └─────────────────┘
+              │                        │
+              ▼                        │
+     ┌─────────────────┐               │
+     │ Ingresar nombre │               │
+     │ del personaje   │               │
+     └─────────────────┘               │
+              │                        │
+              ▼                        │
+     ┌─────────────────┐               │
+     │ CreateCharacter │               │
+     │ (con userId)    │               │
+     └─────────────────┘               │
+              │                        │
+              └────────────┬───────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │       LOBBY/JUEGO       │
+              └─────────────────────────┘
+```
+
+### 7.8 Resumen de Cambios - Fase 7
+
+| Archivo | Tipo de Cambio | Descripción |
+|---------|----------------|-------------|
+| `UserMetadata.cs` | Modificado | Vinculación userId-cuenta, ClearSession() |
+| `PlayerLoginIntegration.cs` | Modificado | Flujo inteligente post-login |
+| `DummyCharacterProviderApi.cs` | Modificado | Filtrado de personajes por userId |
+| `CharacterViewController.cs` | Modificado | Smart flow, detección login, validación personajes |
+| `GameServerDisconnectionHandler.cs` | Modificado | Ignorar desconexión normal |
+| `UICreator.cs` | Modificado | Limpieza singleton |
+| `NoticeController.cs` | Modificado | Destruir ventana en OnDestroy |
+| `EntityContainer.cs` | Modificado | Limpiar repositorio y singleton |
+| `DummyGameApi.cs` | Modificado | Limpieza singleton |
+| `DummyCharacterProviderApi.cs` | Modificado | Limpieza singleton |
+| `DummyGameProviderApi.cs` | Modificado | Limpieza singleton |
+| `DummyChatApi.cs` | Modificado | Limpieza singleton |
+| `LoadingText.cs` | Modificado | Null check en OnDestroy |
+| `ScreenFadeImage.cs` | Modificado | Null check en OnDestroy |
+| `NoticeWindow.cs` | Modificado | Null check en OnDestroy |
+| `ChatController.cs` | Modificado | Null checks en Start/OnDestroy |
+
+### 7.9 Principios SOLID Aplicados en Fase 7
+
+| Principio | Aplicación |
+|-----------|------------|
+| **SRP** | `HasAnyCharacter()` solo verifica existencia, `HandleSmartFlow()` solo decide flujo |
+| **OCP** | Sistema extensible para nuevos flujos post-login sin modificar código existente |
+| **LSP** | `IUserSession` permite sustituir `UserMetadata` por otra implementación |
+| **ISP** | Interfaces específicas: `IUserSession` solo para sesión, `ICharacterProviderApi` solo para personajes |
+| **DIP** | `CharacterViewController` depende de abstracciones (`IUserSession`), no de `UserMetadata` directo |
+
+### 7.10 Patrones de Diseño Aplicados en Fase 7
+
+| Patrón | Uso |
+|--------|-----|
+| **Strategy** | Flujo inteligente decide estrategia (crear vs jugar) según estado |
+| **Singleton** | Limpieza correcta de singletons al cambiar escena |
+| **Observer** | Eventos de login notifican a `CharacterViewController` |
+| **Null Object** | Verificaciones de null antes de operaciones |
+| **Template Method** | `HandleSmartFlow()` define algoritmo, métodos auxiliares implementan pasos |
+
+---
+
+## ✅ ESTADO FINAL DE LA REFACTORIZACIÓN
+
+### Fases Completadas
+
+- [x] **Fase 1:** Fundamentos y Persistencia (`ISaveService`, `ServiceLocator`)
+- [x] **Fase 2:** Desacoplar APIs y Providers (`IApiProvider`, `INetworkConfiguration`)
+- [x] **Fase 3:** Refactorizar PlayerController (`IInputService`, componentes)
+- [x] **Fase 4:** UI con Patrón MVP (`ILoginView`, presenters)
+- [x] **Fase 5:** EntityContainer con Repository Pattern (`IEntityRepository`, `IEntityFactory`)
+- [x] **Fase 6:** Sistema de Login por Nombre (`IPlayerRepository`, `ICredentialValidator`)
+- [x] **Fase 7:** Login V2 - Vinculación UserId con Cuenta (flujo inteligente, correcciones)
+
+### Problemas Resueltos
+
+| Problema | Estado |
+|----------|--------|
+| Personajes compartidos entre usuarios | ✅ Resuelto |
+| UserId no vinculado al email | ✅ Resuelto |
+| Objetos huérfanos al cambiar escena | ✅ Resuelto |
+| MissingReferenceException | ✅ Resuelto |
+| NullReferenceException en UI | ✅ Resuelto |
+| Mensaje de desconexión innecesario | ✅ Resuelto |
+| Singletons no limpiados | ✅ Resuelto |
+
+### Flujo de Usuario Final
+
+1. **Usuario nuevo:**
+   - Email → Crear contraseña → Crear personaje → Juego ✅
+
+2. **Usuario existente sin personaje:**
+   - Email → Contraseña → Crear personaje → Juego ✅
+
+3. **Usuario existente con personaje:**
+   - Email → Contraseña → Juego (directo) ✅
+
+4. **Cambio de usuario:**
+   - Cada usuario solo ve sus propios personajes ✅
+
+---
+

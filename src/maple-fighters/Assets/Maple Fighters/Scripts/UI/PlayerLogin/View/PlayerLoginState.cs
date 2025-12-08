@@ -23,7 +23,13 @@ namespace Scripts.UI.PlayerLogin
         EnterPasswordForLogin,
 
         /// <summary>
+        /// Email no existe - es nuevo usuario, pedir que cree contraseña.
+        /// </summary>
+        EnterPasswordForNewUser,
+
+        /// <summary>
         /// Email no existe - es nuevo usuario, seleccionar personaje.
+        /// (DEPRECATED - ahora CharacterViewController maneja esto)
         /// </summary>
         SelectCharacter,
 

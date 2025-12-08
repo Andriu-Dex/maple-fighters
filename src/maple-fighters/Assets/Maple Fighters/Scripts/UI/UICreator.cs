@@ -33,6 +33,16 @@ namespace UI
             }
         }
 
+        private void OnDestroy()
+        {
+            // Limpiar la instancia estática cuando el objeto se destruye (cambio de escena)
+            if (instance == this)
+            {
+                instance = null;
+            }
+            uiCanvas = null;
+        }
+
         /// <summary>
         /// Loads and creates a new UI element (e.g. SampleMessage : UIElement).
         /// </summary>

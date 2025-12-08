@@ -71,6 +71,17 @@ namespace Scripts.Gameplay.Entity
             gameApi?.SceneEntered?.RemoveListener(OnSceneEntered);
             gameApi?.GameObjectsAdded?.RemoveListener(OnGameObjectsAdded);
             gameApi?.GameObjectsRemoved?.RemoveListener(OnGameObjectsRemoved);
+            
+            // Limpiar el repositorio al cambiar de escena para evitar referencias a objetos destruidos
+            entityRepository?.Clear();
+            localCollection?.Clear();
+            localEntity = null;
+            
+            // Limpiar la instancia singleton
+            if (instance == this)
+            {
+                instance = null;
+            }
         }
 
         private void OnSceneEntered(EnteredSceneMessage message)

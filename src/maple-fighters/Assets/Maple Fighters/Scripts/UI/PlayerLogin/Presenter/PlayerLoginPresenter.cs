@@ -167,6 +167,20 @@ namespace Scripts.UI.PlayerLogin
                     view.FocusInput();
                     break;
 
+                case PlayerLoginState.EnterPasswordForNewUser:
+                    view.ShowLoginPanel();
+                    view.HideCharacterSelectionPanel();
+                    view.HideRegistrationPanel();
+                    view.Title = "Crear contraseña";
+                    view.Placeholder = "Nueva contraseña";
+                    view.StatusMessage = $"Email: {currentEmail}\nCrea una contraseña para tu cuenta";
+                    view.SetPasswordMode(true);
+                    view.ClearInput();
+                    view.EnableInteraction();
+                    view.DisableConfirmButton();
+                    view.FocusInput();
+                    break;
+
                 case PlayerLoginState.SelectCharacter:
                     view.HideLoginPanel();
                     view.HideRegistrationPanel();
@@ -251,6 +265,10 @@ namespace Scripts.UI.PlayerLogin
                     HandlePasswordForLoginSubmitted(input);
                     break;
 
+                case PlayerLoginState.EnterPasswordForNewUser:
+                    HandlePasswordForNewUserSubmitted(input);
+                    break;
+
                 // Legacy v1
                 case PlayerLoginState.EnterName:
                     HandleNameSubmitted(input);
@@ -267,6 +285,11 @@ namespace Scripts.UI.PlayerLogin
             switch (currentState)
             {
                 case PlayerLoginState.EnterPasswordForLogin:
+                    currentEmail = null;
+                    SetState(PlayerLoginState.EnterEmail);
+                    break;
+
+                case PlayerLoginState.EnterPasswordForNewUser:
                     currentEmail = null;
                     SetState(PlayerLoginState.EnterEmail);
                     break;
@@ -305,6 +328,7 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case PlayerLoginState.EnterPasswordForLogin:
+                case PlayerLoginState.EnterPasswordForNewUser:
                 case PlayerLoginState.EnterPassword:
                     isValid = validator?.IsValidPasswordFormat(text) ?? !string.IsNullOrEmpty(text);
                     break;
@@ -380,6 +404,29 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
+        private void HandlePasswordForNewUserSubmitted(string password)
+        {
+            if (validator != null && !validator.IsValidPasswordFormat(password))
+            {
+                view.StatusMessage = validator.GetValidationMessage(CredentialValidationResult.InvalidPasswordFormat);
+                return;
+            }
+
+            SetState(PlayerLoginState.Validating);
+
+            if (loginApi != null)
+            {
+                // Crear cuenta con email y contraseña
+                loginApi.RegisterWithEmail(currentEmail, password);
+            }
+            else
+            {
+                Debug.LogError("[PlayerLoginPresenter] loginApi es null");
+                view.StatusMessage = "Error: API no disponible";
+                SetState(PlayerLoginState.Error);
+            }
+        }
+
         private void HandleRegistrationConfirmed(string playerName, string password)
         {
             // Validar nombre
@@ -437,17 +484,14 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case EmailCheckResult.ExistsIncomplete:
-                    // Usuario existe pero registro incompleto -> login exitoso
-                    // CharacterViewController se encargará de crear el personaje
+                    // Usuario existe pero sin contraseña -> pedir que cree contraseña
                     currentPlayerData = playerData;
-                    SetState(PlayerLoginState.Success);
-                    LoginSuccessful?.Invoke(currentEmail, currentPlayerName ?? "", currentPlayerData);
+                    SetState(PlayerLoginState.EnterPasswordForNewUser);
                     break;
 
                 case EmailCheckResult.NotExists:
-                    // Usuario nuevo -> crear cuenta y login exitoso directo
-                    // CharacterViewController se encargará de crear el personaje
-                    loginApi.CreateAccountWithEmail(currentEmail);
+                    // Usuario nuevo -> pedir que cree contraseña
+                    SetState(PlayerLoginState.EnterPasswordForNewUser);
                     break;
 
                 case EmailCheckResult.InvalidFormat:
@@ -464,9 +508,12 @@ namespace Scripts.UI.PlayerLogin
 
         private void OnLoginByEmailCallback(LoginResult result, int remainingAttempts, string message, IPlayerCredentials playerData)
         {
+            Debug.Log($"[PlayerLoginPresenter] OnLoginByEmailCallback: result={result}, message={message}");
+            
             switch (result)
             {
                 case LoginResult.Success:
+                    Debug.Log($"[PlayerLoginPresenter] Login exitoso, disparando LoginSuccessful para {currentEmail}");
                     currentPlayerData = playerData;
                     currentPlayerName = playerData?.PlayerName;
                     SetState(PlayerLoginState.Success);
@@ -474,6 +521,7 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case LoginResult.WrongPassword:
+                    Debug.Log($"[PlayerLoginPresenter] Contraseña incorrecta, intentos restantes: {remainingAttempts}");
                     SetState(PlayerLoginState.EnterPasswordForLogin);
                     view.StatusMessage = message;
                     view.ClearInput();
@@ -487,12 +535,14 @@ namespace Scripts.UI.PlayerLogin
 
                 case LoginResult.RegistrationIncomplete:
                     // Redirigir a CharacterViewController - login exitoso
+                    Debug.Log($"[PlayerLoginPresenter] Registro incompleto, disparando LoginSuccessful para {currentEmail}");
                     currentPlayerData = playerData;
                     SetState(PlayerLoginState.Success);
                     LoginSuccessful?.Invoke(currentEmail, currentPlayerName ?? "", currentPlayerData);
                     break;
 
                 default:
+                    Debug.Log($"[PlayerLoginPresenter] Error de login: {result}");
                     SetState(PlayerLoginState.Error);
                     view.StatusMessage = message;
                     break;
@@ -501,11 +551,14 @@ namespace Scripts.UI.PlayerLogin
 
         private void OnRegisterWithEmailCallback(RegisterResult result, string message, IPlayerCredentials playerData)
         {
+            Debug.Log($"[PlayerLoginPresenter] OnRegisterWithEmailCallback: result={result}, message={message}");
+            
             switch (result)
             {
                 case RegisterResult.Success:
                     // Cuenta creada - login exitoso directo
                     // CharacterViewController se encargará de crear el personaje
+                    Debug.Log($"[PlayerLoginPresenter] Registro exitoso, disparando LoginSuccessful para {currentEmail}");
                     currentPlayerData = playerData;
                     SetState(PlayerLoginState.Success);
                     LoginSuccessful?.Invoke(currentEmail, currentPlayerName ?? "", currentPlayerData);
@@ -515,6 +568,12 @@ namespace Scripts.UI.PlayerLogin
                     // Email ya existe, ir a login
                     SetState(PlayerLoginState.EnterPasswordForLogin);
                     view.StatusMessage = "Este email ya está registrado. Ingresa tu contraseña.";
+                    break;
+
+                case RegisterResult.InvalidPassword:
+                    // Contraseña inválida, volver a pedir
+                    SetState(PlayerLoginState.EnterPasswordForNewUser);
+                    view.StatusMessage = message;
                     break;
 
                 case RegisterResult.NameAlreadyExists:

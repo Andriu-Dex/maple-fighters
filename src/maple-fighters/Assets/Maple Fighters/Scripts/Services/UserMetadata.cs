@@ -38,6 +38,12 @@ namespace Scripts.Services
 
         private ISaveService saveService;
         private const string UserIdKey = "userid";
+        
+        /// <summary>
+        /// UserId establecido desde el login (Id de la cuenta del jugador).
+        /// Si está establecido, se usa en lugar del userId aleatorio.
+        /// </summary>
+        private string loggedInUserId;
 
         private void Awake()
         {
@@ -116,6 +122,13 @@ namespace Scripts.Services
 
         private string GetUserId()
         {
+            // Si hay un userId establecido desde el login, usarlo
+            if (!string.IsNullOrEmpty(loggedInUserId))
+            {
+                Debug.Log($"[UserMetadata] Usando userId del login: {loggedInUserId}");
+                return loggedInUserId;
+            }
+            
             string userid;
 
             // Usar ISaveService si está disponible
@@ -154,6 +167,54 @@ namespace Scripts.Services
         {
             var userid = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
             return Regex.Replace(userid, "[/+=]", string.Empty);
+        }
+        
+        /// <summary>
+        /// Establece el userId desde las credenciales del login.
+        /// Este userId corresponde al Id de la cuenta del jugador (IPlayerCredentials.Id).
+        /// Los personajes se vincularán a este userId.
+        /// </summary>
+        /// <param name="credentialsId">El Id de las credenciales del jugador</param>
+        public void SetUserIdFromCredentials(string credentialsId)
+        {
+            if (string.IsNullOrEmpty(credentialsId))
+            {
+                Debug.LogWarning("[UserMetadata] Se intentó establecer un userId vacío");
+                return;
+            }
+            
+            loggedInUserId = credentialsId;
+            
+            // Actualizar UserData con el nuevo userId
+            UserData = new UserData()
+            {
+                id = credentialsId
+            };
+            
+            Debug.Log($"[UserMetadata] UserId establecido desde login: {credentialsId}");
+        }
+        
+        /// <summary>
+        /// Limpia la sesión actual del usuario.
+        /// Usar al cerrar sesión para que el siguiente usuario no vea datos anteriores.
+        /// </summary>
+        public void ClearSession()
+        {
+            loggedInUserId = null;
+            IsLoggedIn = false;
+            CharacterId = 0;
+            CharacterType = 0;
+            CharacterName = null;
+            CharacterLevel = 0;
+            CharacterExperiencePoints = 0;
+            
+            // Regenerar UserData con un nuevo userId aleatorio
+            UserData = new UserData()
+            {
+                id = GetUserId()
+            };
+            
+            Debug.Log("[UserMetadata] Sesión limpiada");
         }
     }
 }

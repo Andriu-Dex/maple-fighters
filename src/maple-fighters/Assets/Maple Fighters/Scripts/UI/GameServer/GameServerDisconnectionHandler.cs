@@ -28,6 +28,12 @@ namespace Scripts.UI.GameServer
         {
             Debug.Log($"Game server disconnection reason: {code}");
 
+            // Ignorar desconexión normal (esperada al cambiar de escena o cerrar)
+            if (code == WebSocketCloseCode.Normal)
+            {
+                return;
+            }
+
             var focusStateController =
                 FindObjectOfType<FocusStateController>();
             if (focusStateController != null)

@@ -63,6 +63,12 @@ namespace Scripts.Services.GameApi
 
         private void OnDestroy()
         {
+            // Limpiar la instancia singleton
+            if (instance == this)
+            {
+                instance = null;
+            }
+            
             ApiProvider.RemoveGameApiProvider();
 
             Disconnected?.Invoke(WebSocketCloseCode.Normal);

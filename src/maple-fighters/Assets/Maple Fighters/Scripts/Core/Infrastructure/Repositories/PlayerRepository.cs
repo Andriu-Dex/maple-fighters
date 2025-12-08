@@ -79,6 +79,29 @@ namespace Scripts.Core.Infrastructure.Repositories
         }
 
         /// <inheritdoc/>
+        public IPlayerCredentials CreatePlayerWithEmailAndPassword(string email, string password)
+        {
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            {
+                return null;
+            }
+
+            if (playersByEmail.ContainsKey(email))
+            {
+                Debug.LogWarning($"[PlayerRepository] Email ya existe: {email}");
+                return null;
+            }
+
+            var newPlayer = new PlayerCredentialsData(email);
+            newPlayer.Password = password;
+            playersByEmail[email] = newPlayer;
+            SavePlayers();
+
+            Debug.Log($"[PlayerRepository] Jugador creado con email y contraseña: {email}");
+            return newPlayer;
+        }
+
+        /// <inheritdoc/>
         public bool CompleteRegistration(string email, string playerName, string password, string characterClass)
         {
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(playerName) || 
@@ -272,6 +295,27 @@ namespace Scripts.Core.Infrastructure.Repositories
             SavePlayers();
 
             Debug.Log($"[PlayerRepository] Contraseña actualizada para: {playerName}");
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public bool UpdatePasswordByEmail(string email, string newPassword)
+        {
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(newPassword))
+            {
+                return false;
+            }
+
+            if (!playersByEmail.TryGetValue(email, out var player))
+            {
+                Debug.LogWarning($"[PlayerRepository] No se encontró jugador con email: {email}");
+                return false;
+            }
+
+            player.Password = newPassword;
+            SavePlayers();
+
+            Debug.Log($"[PlayerRepository] Contraseña actualizada por email para: {email}");
             return true;
         }
 

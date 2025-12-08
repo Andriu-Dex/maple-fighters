@@ -344,7 +344,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   loginWindow: {fileID: 0}
   showOnStart: 1
-  enableAutoLogin: 1
+  enableAutoLogin: 0
 --- !u!4 &870329708
 Transform:
   m_ObjectHideFlags: 0
@@ -539,7 +539,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   loginWindow: {fileID: 0}
   showOnStart: 1
-  enableAutoLogin: 1
+  enableAutoLogin: 0
 --- !u!4 &1357026881
 Transform:
   m_ObjectHideFlags: 0
