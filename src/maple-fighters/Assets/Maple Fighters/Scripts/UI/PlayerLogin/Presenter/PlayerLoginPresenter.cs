@@ -509,6 +509,14 @@ namespace Scripts.UI.PlayerLogin
 
         private void OnLoginByEmailCallback(LoginResult result, int remainingAttempts, string message, IPlayerCredentials playerData)
         {
+            // Solo procesar si este Presenter está esperando un callback de login
+            // Esto evita que múltiples instancias de Presenter procesen el mismo callback
+            if (currentState != PlayerLoginState.Validating)
+            {
+                Debug.Log($"[PlayerLoginPresenter] Ignorando callback de login - estado actual: {currentState}");
+                return;
+            }
+            
             Debug.Log($"[PlayerLoginPresenter] OnLoginByEmailCallback: result={result}, message={message}");
             
             switch (result)
@@ -552,6 +560,13 @@ namespace Scripts.UI.PlayerLogin
 
         private void OnRegisterWithEmailCallback(RegisterResult result, string message, IPlayerCredentials playerData)
         {
+            // Solo procesar si este Presenter está esperando un callback de registro
+            if (currentState != PlayerLoginState.Validating)
+            {
+                Debug.Log($"[PlayerLoginPresenter] Ignorando callback de registro - estado actual: {currentState}");
+                return;
+            }
+            
             Debug.Log($"[PlayerLoginPresenter] OnRegisterWithEmailCallback: result={result}, message={message}");
             
             switch (result)
