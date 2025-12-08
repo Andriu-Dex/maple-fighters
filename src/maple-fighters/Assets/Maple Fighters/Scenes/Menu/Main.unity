@@ -517,6 +517,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1357026881}
   - component: {fileID: 1357026880}
+  - component: {fileID: 1357026882}
   m_Layer: 0
   m_Name: PlayerLoginController
   m_TagString: Untagged
@@ -553,6 +554,23 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 13
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1357026882
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1357026879}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fd8d888fe4afdc41a885e137366014d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  loginController: {fileID: 1357026880}
+  characterViewController: {fileID: 1512247818}
+  gameScene: Game
+  useSceneTransition: 0
+  adminPanel: {fileID: 0}
 --- !u!1 &1478916846
 GameObject:
   m_ObjectHideFlags: 0

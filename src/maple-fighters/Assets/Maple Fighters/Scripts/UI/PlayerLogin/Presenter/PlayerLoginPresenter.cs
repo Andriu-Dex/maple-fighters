@@ -437,13 +437,16 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case EmailCheckResult.ExistsIncomplete:
-                    // Usuario existe pero registro incompleto -> ir a selección
+                    // Usuario existe pero registro incompleto -> login exitoso
+                    // CharacterViewController se encargará de crear el personaje
                     currentPlayerData = playerData;
-                    SetState(PlayerLoginState.SelectCharacter);
+                    SetState(PlayerLoginState.Success);
+                    LoginSuccessful?.Invoke(currentEmail, currentPlayerName ?? "", currentPlayerData);
                     break;
 
                 case EmailCheckResult.NotExists:
-                    // Usuario nuevo -> crear cuenta y ir a selección
+                    // Usuario nuevo -> crear cuenta y login exitoso directo
+                    // CharacterViewController se encargará de crear el personaje
                     loginApi.CreateAccountWithEmail(currentEmail);
                     break;
 
@@ -483,8 +486,10 @@ namespace Scripts.UI.PlayerLogin
                     break;
 
                 case LoginResult.RegistrationIncomplete:
-                    // Redirigir a completar registro
-                    SetState(PlayerLoginState.SelectCharacter);
+                    // Redirigir a CharacterViewController - login exitoso
+                    currentPlayerData = playerData;
+                    SetState(PlayerLoginState.Success);
+                    LoginSuccessful?.Invoke(currentEmail, currentPlayerName ?? "", currentPlayerData);
                     break;
 
                 default:
@@ -499,20 +504,11 @@ namespace Scripts.UI.PlayerLogin
             switch (result)
             {
                 case RegisterResult.Success:
-                    if (playerData != null && !string.IsNullOrEmpty(playerData.Password))
-                    {
-                        // Registro completo - login exitoso
-                        currentPlayerData = playerData;
-                        currentPlayerName = playerData.PlayerName;
-                        SetState(PlayerLoginState.Success);
-                        LoginSuccessful?.Invoke(currentEmail, currentPlayerName, currentPlayerData);
-                    }
-                    else
-                    {
-                        // Solo cuenta creada - ir a selección
-                        currentPlayerData = playerData;
-                        SetState(PlayerLoginState.SelectCharacter);
-                    }
+                    // Cuenta creada - login exitoso directo
+                    // CharacterViewController se encargará de crear el personaje
+                    currentPlayerData = playerData;
+                    SetState(PlayerLoginState.Success);
+                    LoginSuccessful?.Invoke(currentEmail, currentPlayerName ?? "", currentPlayerData);
                     break;
 
                 case RegisterResult.EmailAlreadyExists:

@@ -10,17 +10,17 @@ namespace Scripts.UI.PlayerLogin
 {
     /// <summary>
     /// Integrador del sistema de login de jugadores v2 con el flujo del juego.
-    /// En v2, la selección de personaje para nuevos usuarios ocurre dentro
-    /// del flujo de login, por lo que este componente principalmente maneja
-    /// la transición al juego después del login exitoso.
     /// 
-    /// Flujo v2:
-    ///   - Usuario nuevo: Email -> Selección clase -> Nombre+Password -> Juego
-    ///   - Usuario existente: Email -> Password -> Juego (sin selección de clase)
+    /// Flujo v2 simplificado:
+    ///   - Usuario nuevo: Email -> Crear cuenta -> CharacterViewController (crear personaje) -> Juego
+    ///   - Usuario existente: Email -> Password -> CharacterViewController (elegir personaje) -> Juego
+    /// 
+    /// El CharacterViewController maneja toda la lógica de crear/elegir/eliminar personajes.
     /// 
     /// Configuración en Unity:
     ///   1. Agregar a un GameObject en la escena de Login/Menú principal
     ///   2. Asignar las referencias necesarias en el inspector
+    ///   3. Asignar el CharacterViewController de la escena
     /// </summary>
     public class PlayerLoginIntegration : MonoBehaviour
     {

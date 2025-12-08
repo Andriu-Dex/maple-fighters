@@ -26,7 +26,8 @@ namespace Scripts.UI.PlayerLogin
         private bool showOnStart = true;
 
         [SerializeField]
-        private bool enableAutoLogin = true;
+        [Tooltip("Si está habilitado, salta la ventana de login si hay sesión válida. Deshabilitado por defecto para siempre mostrar login.")]
+        private bool enableAutoLogin = false;
 
         private PlayerLoginPresenter presenter;
         private IPlayerLoginApi cachedLoginApi;
