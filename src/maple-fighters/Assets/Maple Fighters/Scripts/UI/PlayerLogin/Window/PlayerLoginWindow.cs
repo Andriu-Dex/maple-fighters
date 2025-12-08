@@ -217,6 +217,10 @@ namespace Scripts.UI.PlayerLogin
 
         private void Start()
         {
+            // Agregar outline a los textos para mejor legibilidad
+            AddOutlineToText(titleText);
+            AddOutlineToText(statusMessageText);
+
             // Main panel events
             confirmButton?.onClick.AddListener(OnConfirmButtonClicked);
             backButton?.onClick.AddListener(OnBackButtonClicked);
@@ -231,6 +235,22 @@ namespace Scripts.UI.PlayerLogin
 
             // Registration panel events
             registerButton?.onClick.AddListener(OnRegisterButtonClicked);
+        }
+
+        /// <summary>
+        /// Agrega un componente Outline a un Text para mejor legibilidad sobre fondos complejos.
+        /// </summary>
+        private void AddOutlineToText(Text text)
+        {
+            if (text == null) return;
+            
+            var outline = text.GetComponent<Outline>();
+            if (outline == null)
+            {
+                outline = text.gameObject.AddComponent<Outline>();
+            }
+            outline.effectColor = new Color(0, 0, 0, 0.8f); // Negro semi-transparente
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
         }
 
         private void OnDestroy()

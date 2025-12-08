@@ -158,9 +158,9 @@ namespace Scripts.UI.PlayerLogin
                     view.ShowLoginPanel();
                     view.HideCharacterSelectionPanel();
                     view.HideRegistrationPanel();
-                    view.Title = "<color=#FFD700>¡Bienvenido de nuevo!</color>";
+                    view.Title = "<b><color=#FFD700><size=34>¡Bienvenido de nuevo!</size></color></b>";
                     view.Placeholder = "Contraseña";
-                    view.StatusMessage = $"<color=#AADDFF><size=14>📧 {currentEmail}</size></color>";
+                    view.StatusMessage = $"<b><color=#FFFFFF><size=21>📧 {currentEmail}</size></color></b>";
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
@@ -173,9 +173,9 @@ namespace Scripts.UI.PlayerLogin
                     view.ShowLoginPanel();
                     view.HideCharacterSelectionPanel();
                     view.HideRegistrationPanel();
-                    view.Title = "<color=#90EE90>¡Nuevo usuario!</color>";
+                    view.Title = "<b><color=#90EE90>¡Nuevo usuario!</color></b>";
                     view.Placeholder = "Nueva contraseña";
-                    view.StatusMessage = $"<color=#AADDFF><size=14>📧 {currentEmail}</size></color>\n<color=#FFFFFF><size=12>Crea una contraseña segura para tu cuenta</size></color>";
+                    view.StatusMessage = $"<b><color=#AADDFF><size=14>📧 {currentEmail}</size></color></b>\n<color=#FFFFFF><size=12>Crea una contraseña segura para tu cuenta</size></color>";
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
