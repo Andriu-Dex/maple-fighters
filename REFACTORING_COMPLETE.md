@@ -37,12 +37,12 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
 │       ├── ServiceLocator.cs                # Localizador de servicios
 │       ├── ServiceLocatorInitializer.cs     # Inicializador (MonoBehaviour)
 │       ├── Persistence/                     # 🆕 Servicios de persistencia
-│       │   ├── JsonSaveService.cs           # Implementación JSON
+│       │   ├── JsonSaveService.cs           # Implementación JSON (archivos) / PlayerPrefs (WebGL)
 │       │   └── PlayerPrefsSaveService.cs    # Implementación PlayerPrefs
 │       ├── Configuration/                   # 🆕 Adaptadores de configuración
 │       │   └── NetworkConfigurationAdapter.cs
 │       ├── Services/                        # 🆕 Servicios de aplicación
-│       │   ├── ApiProviderService.cs        # Implementación IApiProvider
+│       │   ├── ApiProviderService.cs        # Implementación IApiProvider (siempre usa DummyCharacterProviderApi)
 │       │   ├── UnityInputService.cs         # Implementación IInputService
 │       │   ├── CredentialValidator.cs       # 🆕 Validación de credenciales
 │       │   ├── LoginAttemptTracker.cs       # 🆕 Tracking de intentos
@@ -404,7 +404,7 @@ public class NetworkConfigurationAdapter : INetworkConfiguration
 | Archivo | Propósito |
 |---------|-----------|
 | `ISaveService.cs` | Interface para abstracción de persistencia |
-| `JsonSaveService.cs` | Guarda datos en JSON en `Application.persistentDataPath` |
+| `JsonSaveService.cs` | Guarda datos en JSON. En WebGL usa PlayerPrefs (IndexedDB), en otras plataformas usa archivos |
 | `PlayerPrefsSaveService.cs` | Usa PlayerPrefs de Unity (fallback) |
 | `ServiceLocator.cs` | Registro central de servicios |
 | `ServiceLocatorInitializer.cs` | MonoBehaviour que inicializa servicios |
@@ -1398,19 +1398,8 @@ INICIO
 - [x] **Fase 4:** UI con Patrón MVP (`ILoginView`, presenters)
 - [x] **Fase 5:** EntityContainer con Repository Pattern (`IEntityRepository`, `IEntityFactory`)
 - [x] **Fase 6:** Sistema de Login por Nombre (`IPlayerRepository`, `ICredentialValidator`)
-- [x] **Fase 7:** Login V2 - Vinculación UserId con Cuenta (flujo inteligente, correcciones)
-
-### Problemas Resueltos
-
-| Problema | Estado |
-|----------|--------|
-| Personajes compartidos entre usuarios | ✅ Resuelto |
-| UserId no vinculado al email | ✅ Resuelto |
-| Objetos huérfanos al cambiar escena | ✅ Resuelto |
-| MissingReferenceException | ✅ Resuelto |
-| NullReferenceException en UI | ✅ Resuelto |
-| Mensaje de desconexión innecesario | ✅ Resuelto |
-| Singletons no limpiados | ✅ Resuelto |
+- [x] **Fase 7:** Login V2 - Vinculación UserId con Cuenta (flujo inteligente)
+- [x] **Fase 8:** Persistencia WebGL y Character API unificada
 
 ### Flujo de Usuario Final
 
@@ -1425,6 +1414,228 @@ INICIO
 
 4. **Cambio de usuario:**
    - Cada usuario solo ve sus propios personajes ✅
+
+5. **Persistencia de progreso:**
+   - Nivel y experiencia se guardan automáticamente ✅
+   - Funciona en WebGL (navegador) y standalone ✅
+
+---
+
+## 🆕 FASE 8: Persistencia WebGL y Character API Unificada
+
+### 8.1 Objetivo
+
+Implementar persistencia de datos del personaje (nivel, experiencia) que funcione tanto en builds standalone como en WebGL (navegador).
+
+### 8.2 Arquitectura de Persistencia Multi-Plataforma
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     JsonSaveService                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────┐          ┌──────────────────┐             │
+│  │    STANDALONE    │          │      WEBGL       │             │
+│  │   (Windows/Mac)  │          │    (Browser)     │             │
+│  ├──────────────────┤          ├──────────────────┤             │
+│  │ File.WriteAllText│          │ PlayerPrefs      │             │
+│  │ File.ReadAllText │          │ (IndexedDB)      │             │
+│  │                  │          │                  │             │
+│  │ persistentDataPath          │ Almacenamiento   │             │
+│  │ /game_save_data  │          │ del navegador    │             │
+│  └──────────────────┘          └──────────────────┘             │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 8.3 Implementación de JsonSaveService
+
+```csharp
+public class JsonSaveService : ISaveService
+{
+    private const string SaveFileName = "game_save_data.json";
+    private const string PlayerPrefsKey = "JsonSaveService_Data";
+    
+    private Dictionary<string, object> data;
+    private readonly string savePath;
+    private bool isDirty;
+    private readonly bool usePlayerPrefs;
+
+    public JsonSaveService()
+    {
+        // En WebGL no se puede usar el sistema de archivos
+#if UNITY_WEBGL && !UNITY_EDITOR
+        usePlayerPrefs = true;
+        savePath = string.Empty;
+        Debug.Log("[JsonSaveService] WebGL detectado - usando PlayerPrefs (IndexedDB)");
+#else
+        usePlayerPrefs = false;
+        savePath = Path.Combine(Application.persistentDataPath, SaveFileName);
+        Debug.Log($"[JsonSaveService] Usando archivos - path: {savePath}");
+#endif
+        data = new Dictionary<string, object>();
+        LoadFromFile();
+    }
+
+    public void Save()
+    {
+        if (!isDirty) return;
+
+        var json = SerializeDictionary(data);
+        
+        if (usePlayerPrefs)
+        {
+            // WebGL: usa PlayerPrefs (se mapea a IndexedDB del navegador)
+            PlayerPrefs.SetString(PlayerPrefsKey, json);
+            PlayerPrefs.Save();
+        }
+        else
+        {
+            // Otras plataformas: usa archivo
+            File.WriteAllText(savePath, json);
+        }
+        
+        isDirty = false;
+    }
+
+    private void LoadFromFile()
+    {
+        string json = string.Empty;
+        
+        if (usePlayerPrefs)
+        {
+            if (PlayerPrefs.HasKey(PlayerPrefsKey))
+            {
+                json = PlayerPrefs.GetString(PlayerPrefsKey);
+            }
+        }
+        else
+        {
+            if (File.Exists(savePath))
+            {
+                json = File.ReadAllText(savePath);
+            }
+        }
+        
+        data = !string.IsNullOrEmpty(json) 
+            ? DeserializeDictionary(json) 
+            : new Dictionary<string, object>();
+    }
+}
+```
+
+### 8.4 API de Personajes Unificada
+
+`ApiProviderService` siempre usa `DummyCharacterProviderApi` para garantizar persistencia local consistente:
+
+```csharp
+public class ApiProviderService : IApiProvider
+{
+    private ICharacterProviderApi characterProviderApi;
+
+    public ICharacterProviderApi GetCharacterProviderApi()
+    {
+        if (characterProviderApi == null)
+        {
+            characterProviderApi = CreateCharacterProviderApi();
+        }
+        return characterProviderApi;
+    }
+
+    private ICharacterProviderApi CreateCharacterProviderApi()
+    {
+        // SIEMPRE usar DummyCharacterProviderApi para persistencia local
+        return DummyCharacterProviderApi.GetInstance();
+    }
+}
+```
+
+### 8.5 Flujo de Persistencia de Nivel
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  FLUJO DE GUARDADO DE NIVEL                      │
+└─────────────────────────────────────────────────────────────────┘
+
+    Jugador mata enemigo
+           │
+           ▼
+    ┌─────────────────┐
+    │ MobBehaviour    │
+    │ OnMobDied()     │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │ UserMetadata    │
+    │ AddExperience   │
+    │ Points(value)   │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │ VerifyCharacter │
+    │ Level()         │
+    │ (sube nivel?)   │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │ SaveCharacter   │
+    │ Data()          │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────────────┐
+    │ DummyCharacterProvider  │
+    │ Api.UpdateCharacter()   │
+    │ (id, level, exp)        │
+    └────────────┬────────────┘
+                 │
+                 ▼
+    ┌─────────────────────────┐
+    │ SaveCharacterCollection │
+    │ ()                      │
+    └────────────┬────────────┘
+                 │
+                 ▼
+    ┌─────────────────────────┐
+    │ ISaveService.SetString  │
+    │ ("characters", json)    │
+    └────────────┬────────────┘
+                 │
+                 ▼
+    ┌─────────────────────────┐
+    │ ISaveService.Save()     │
+    │ (archivo o PlayerPrefs) │
+    └─────────────────────────┘
+```
+
+### 8.6 Archivos Modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `JsonSaveService.cs` | Detecta WebGL y usa PlayerPrefs (IndexedDB) en lugar de archivos |
+| `ApiProviderService.cs` | Siempre retorna `DummyCharacterProviderApi` para persistencia local |
+| `ApiProvider.cs` | Fallback a `DummyCharacterProviderApi` |
+| `DummyCharacterProviderApi.cs` | Siempre actualiza diccionario desde datos del archivo/storage |
+
+### 8.7 Principios Aplicados
+
+| Principio | Aplicación |
+|-----------|------------|
+| **OCP** | `JsonSaveService` extensible para nuevas plataformas sin modificar código existente |
+| **DIP** | Dependencia en `ISaveService`, no en implementación concreta |
+| **SRP** | `JsonSaveService` solo maneja persistencia, detecta plataforma internamente |
+
+### 8.8 Consideraciones WebGL
+
+| Aspecto | Implementación |
+|---------|----------------|
+| Sistema de archivos | No disponible en WebGL - usa PlayerPrefs |
+| PlayerPrefs en WebGL | Se mapea a IndexedDB del navegador |
+| Persistencia | Datos persisten entre sesiones del navegador |
+| Compilación condicional | `#if UNITY_WEBGL && !UNITY_EDITOR` |
 
 ---
 
