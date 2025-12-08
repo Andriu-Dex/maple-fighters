@@ -145,6 +145,7 @@ namespace Scripts.UI.PlayerLogin
                     view.ClearInput();
                     view.EnableInteraction();
                     view.DisableConfirmButton();
+                    view.DisableBackButton(); // Estado inicial - no hay adonde volver
                     view.FocusInput();
                     break;
 
@@ -163,6 +164,7 @@ namespace Scripts.UI.PlayerLogin
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
+                    view.EnableBackButton(); // Permitir volver a ingresar email
                     view.DisableConfirmButton();
                     view.FocusInput();
                     break;
@@ -177,6 +179,7 @@ namespace Scripts.UI.PlayerLogin
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
+                    view.EnableBackButton(); // Permitir volver a ingresar email;
                     view.DisableConfirmButton();
                     view.FocusInput();
                     break;
@@ -224,6 +227,7 @@ namespace Scripts.UI.PlayerLogin
                     view.ClearInput();
                     view.EnableInteraction();
                     view.DisableConfirmButton();
+                    view.DisableBackButton(); // Estado inicial legacy - no hay adonde volver
                     view.FocusInput();
                     break;
 
@@ -239,6 +243,7 @@ namespace Scripts.UI.PlayerLogin
                     view.SetPasswordMode(true);
                     view.ClearInput();
                     view.EnableInteraction();
+                    view.EnableBackButton(); // Permitir volver a ingresar nombre
                     view.DisableConfirmButton();
                     view.FocusInput();
                     break;
@@ -285,6 +290,13 @@ namespace Scripts.UI.PlayerLogin
         {
             switch (currentState)
             {
+                // Estados iniciales - Back no hace nada (ya estamos al inicio)
+                case PlayerLoginState.EnterEmail:
+                case PlayerLoginState.EnterName: // Legacy v1
+                    // Ya estamos en el estado inicial, no hay adonde volver
+                    Debug.Log($"[PlayerLoginPresenter] Back ignorado - ya estamos en estado inicial: {currentState}");
+                    break;
+
                 case PlayerLoginState.EnterPasswordForLogin:
                     currentEmail = null;
                     SetState(PlayerLoginState.EnterEmail);
@@ -310,7 +322,23 @@ namespace Scripts.UI.PlayerLogin
                     SetState(PlayerLoginState.EnterName);
                     break;
 
+                // Estados de validación/procesamiento - esperar o volver al estado anterior
+                case PlayerLoginState.Validating:
+                case PlayerLoginState.CheckingEmail:
+                    // Durante validación, Back debería cancelar y volver a EnterEmail
+                    currentEmail = null;
+                    SetState(PlayerLoginState.EnterEmail);
+                    break;
+
+                // Estado bloqueado - Back vuelve a EnterEmail para intentar con otra cuenta
+                case PlayerLoginState.Blocked:
+                    currentEmail = null;
+                    SetState(PlayerLoginState.EnterEmail);
+                    break;
+
                 default:
+                    // Solo invocar BackRequested para estados desconocidos
+                    Debug.Log($"[PlayerLoginPresenter] Back en estado no manejado: {currentState}");
                     BackRequested?.Invoke();
                     break;
             }

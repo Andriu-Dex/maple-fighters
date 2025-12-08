@@ -95,6 +95,12 @@ namespace Scripts.UI.PlayerLogin
         void EnableBackButton();
 
         /// <summary>
+        /// Deshabilita/oculta el botón de retroceso (Back).
+        /// Útil para estados iniciales donde no hay adonde volver.
+        /// </summary>
+        void DisableBackButton();
+
+        /// <summary>
         /// Habilita toda la interacción con la vista.
         /// </summary>
         void EnableInteraction();
