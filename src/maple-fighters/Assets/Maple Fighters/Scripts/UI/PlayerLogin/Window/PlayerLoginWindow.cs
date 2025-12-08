@@ -271,6 +271,14 @@ namespace Scripts.UI.PlayerLogin
             }
         }
 
+        public void EnableBackButton()
+        {
+            if (backButton != null)
+            {
+                backButton.interactable = true;
+            }
+        }
+
         public void EnableInteraction()
         {
             if (inputField != null) inputField.interactable = true;

@@ -89,6 +89,12 @@ namespace Scripts.UI.PlayerLogin
         void DisableConfirmButton();
 
         /// <summary>
+        /// Habilita el botón de retroceso (Back).
+        /// Útil para estados como Blocked donde se debe permitir volver.
+        /// </summary>
+        void EnableBackButton();
+
+        /// <summary>
         /// Habilita toda la interacción con la vista.
         /// </summary>
         void EnableInteraction();
