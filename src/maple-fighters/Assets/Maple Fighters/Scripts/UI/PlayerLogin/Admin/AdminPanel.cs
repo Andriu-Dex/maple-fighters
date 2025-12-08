@@ -240,9 +240,24 @@ namespace Scripts.UI.PlayerLogin
                 return;
             }
 
-            // Definir área del panel
-            var panelWidth = 450f;
-            var panelHeight = 500f;
+            // Verificar que adminService esté disponible
+            if (adminService == null)
+            {
+                InitializeServices();
+                if (adminService == null)
+                {
+                    isVisible = false;
+                    return;
+                }
+            }
+
+            // Escalar UI basado en resolución (referencia: 1920x1080)
+            float scaleFactor = Screen.height / 1080f;
+            scaleFactor = Mathf.Clamp(scaleFactor, 1.0f, 2.5f);
+
+            // Definir área del panel - escalado
+            var panelWidth = 600f * scaleFactor;
+            var panelHeight = 650f * scaleFactor;
             var panelX = (Screen.width - panelWidth) / 2;
             var panelY = (Screen.height - panelHeight) / 2;
 
@@ -255,22 +270,22 @@ namespace Scripts.UI.PlayerLogin
             GUILayout.BeginVertical(GUI.skin.box);
 
             // Título
-            GUILayout.Label("Panel de Administrador", GetTitleStyle());
-            GUILayout.Space(15);
+            GUILayout.Label("Panel de Administrador", GetTitleStyle(scaleFactor));
+            GUILayout.Space(20 * scaleFactor);
 
             // Información - Mostrar email si no hay nombre
             var displayName = !string.IsNullOrEmpty(currentPlayerName) ? currentPlayerName : currentEmail;
-            GUILayout.Label($"Usuario: {displayName}", GetInfoStyle());
+            GUILayout.Label($"Usuario: {displayName}", GetInfoStyle(scaleFactor));
             
             var blockedCount = adminService.GetBlockedPlayersCount();
-            GUILayout.Label($"Jugadores bloqueados: {blockedCount}", GetInfoStyle());
+            GUILayout.Label($"Jugadores bloqueados: {blockedCount}", GetInfoStyle(scaleFactor));
 
-            GUILayout.Space(15);
+            GUILayout.Space(20 * scaleFactor);
 
             // Botón para desbloquear todos
             if (blockedCount > 0)
             {
-                if (GUILayout.Button("Desbloquear Todos", GUILayout.Height(45)))
+                if (GUILayout.Button("Desbloquear Todos", GetButtonStyle(scaleFactor), GUILayout.Height(50 * scaleFactor)))
                 {
                     // Usar email como identificador de admin si no hay nombre
                     var adminId = !string.IsNullOrEmpty(currentPlayerName) ? currentPlayerName : "Admin";
@@ -280,41 +295,41 @@ namespace Scripts.UI.PlayerLogin
                     }
                 }
 
-                GUILayout.Space(15);
+                GUILayout.Space(15 * scaleFactor);
 
                 // Lista de jugadores bloqueados
-                GUILayout.Label("Lista de jugadores bloqueados:", GetSubtitleStyle());
+                GUILayout.Label("Lista de jugadores bloqueados:", GetSubtitleStyle(scaleFactor));
 
-                scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(250));
+                scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(250 * scaleFactor));
 
                 var blockedPlayers = adminService.GetBlockedPlayers("Admin");
                 foreach (var player in blockedPlayers)
                 {
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label(player, GUILayout.Width(250));
+                    GUILayout.Label(player, GetInfoStyle(scaleFactor), GUILayout.Width(280 * scaleFactor));
                     
-                    if (GUILayout.Button("Desbloquear", GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("Desbloquear", GetButtonStyle(scaleFactor), GUILayout.Width(140 * scaleFactor), GUILayout.Height(35 * scaleFactor)))
                     {
                         adminService.UnblockPlayer("Admin", player);
                     }
                     
                     GUILayout.EndHorizontal();
-                    GUILayout.Space(5);
+                    GUILayout.Space(8 * scaleFactor);
                 }
 
                 GUILayout.EndScrollView();
             }
             else
             {
-                GUILayout.Space(20);
-                GUILayout.Label("No hay jugadores bloqueados.", GetInfoStyle());
+                GUILayout.Space(25 * scaleFactor);
+                GUILayout.Label("No hay jugadores bloqueados.", GetInfoStyle(scaleFactor));
                 GUILayout.FlexibleSpace();
             }
 
-            GUILayout.Space(10);
+            GUILayout.Space(15 * scaleFactor);
 
             // Botón cerrar
-            if (GUILayout.Button("Cerrar (F12)", GUILayout.Height(40)))
+            if (GUILayout.Button("Cerrar (F12)", GetButtonStyle(scaleFactor), GUILayout.Height(45 * scaleFactor)))
             {
                 Hide();
             }
@@ -323,32 +338,41 @@ namespace Scripts.UI.PlayerLogin
             GUILayout.EndArea();
         }
 
-        private GUIStyle GetTitleStyle()
+        private GUIStyle GetTitleStyle(float scale)
         {
             var style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 22,
+                fontSize = Mathf.RoundToInt(28 * scale),
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter
             };
             return style;
         }
 
-        private GUIStyle GetSubtitleStyle()
+        private GUIStyle GetSubtitleStyle(float scale)
         {
             var style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14,
+                fontSize = Mathf.RoundToInt(20 * scale),
                 fontStyle = FontStyle.Bold
             };
             return style;
         }
 
-        private GUIStyle GetInfoStyle()
+        private GUIStyle GetInfoStyle(float scale)
         {
             var style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14
+                fontSize = Mathf.RoundToInt(18 * scale)
+            };
+            return style;
+        }
+
+        private GUIStyle GetButtonStyle(float scale)
+        {
+            var style = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = Mathf.RoundToInt(18 * scale)
             };
             return style;
         }

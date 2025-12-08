@@ -5,6 +5,7 @@ using Scripts.Gameplay.Map;
 using Scripts.Gameplay.Player;
 using Scripts.UI.Chat;
 using Scripts.UI.Focus;
+using Scripts.UI.GameMenu;
 using Scripts.UI.GameServer;
 using Scripts.UI.Notice;
 using Scripts.UI.PlayerData;
@@ -42,6 +43,7 @@ namespace Scripts.Gameplay.Creator
             yield return typeof(ChatController);
             yield return typeof(PlayerDataController);
             yield return typeof(GameServerDisconnectionHandler);
+            yield return typeof(GameMenuPanel);
         }
 
         private void CreateGameComponents(IEnumerable<Type> components)

@@ -75,6 +75,9 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
     │       ├── LoginPresenter.cs
     │       └── RegistrationPresenter.cs
     │
+    ├── GameMenu/                            # 🆕 NUEVA - Menú del juego
+    │   └── GameMenuPanel.cs                 # Panel de menú con logout (ESC)
+    │
     └── PlayerLogin/                         # 🆕 NUEVA - Sistema de login por nombre
         ├── Controller/
         │   ├── PlayerLoginController.cs     # Controlador principal
@@ -87,7 +90,7 @@ src/maple-fighters/Assets/Maple Fighters/Scripts/
         ├── Window/
         │   └── PlayerLoginWindow.cs         # Ventana UI
         └── Admin/
-            └── AdminPanel.cs                # Panel de administración
+            └── AdminPanel.cs                # Panel de administración (F12)
 ```
 
 ---
@@ -827,6 +830,14 @@ Player Login System (GameObject)
 - Puede ver lista de jugadores bloqueados
 - Puede desbloquear jugadores individualmente o todos
 - Panel persiste entre escenas usando `DontDestroyOnLoad`
+
+#### Menú del Juego (GameMenuPanel)
+- Presionar **ESC** durante el juego abre el menú
+- Opciones disponibles:
+  - **Continuar**: Cierra el menú y vuelve al juego
+  - **Cerrar Sesión**: Limpia la sesión y vuelve a la pantalla de login
+- Panel creado automáticamente por `GameSystemsCreator`
+- UI escalable según resolución de pantalla
 
 ---
 
