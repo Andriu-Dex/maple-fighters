@@ -1,12 +1,3 @@
-# 📋 REFACTORIZACIÓN COMPLETA - Maple Fighters (Unity Client)
-
----
-
-## **Análisis EXTREMADAMENTE detallado por patrón (definición, por qué, dónde, código, pruebas, trade-offs)**
-
-Esta subsección amplía aún más la documentación anterior. Aquí se explica cada patrón aplicado con un nivel de detalle técnico pensada para un mantenedor: intención del patrón, cuándo preferirlo, fragmentos de código reales/representativos del proyecto, exactas rutas de archivo donde está implementado y cómo afecta a pruebas/CI/depuración.
-
-IMPORTANTE: cuando cito archivos uso la ruta relativa al repositorio; por ejemplo `Core/Infrastructure/ServiceLocator.cs` se expande a `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocator.cs`.
 
 ---
 
@@ -199,6 +190,10 @@ IMPORTANTE: cuando cito archivos uso la ruta relativa al repositorio; por ejempl
 
 ### Template Method y Null Object — detalle rápido
 
+En el refactor detectamos que varios controladores repetían la misma secuencia de pasos al resolver una acción (cargar datos, validar estado, aplicar efectos y actualizar la vista) pero con pequeñas variaciones. Para mantener el flujo de alto nivel consistente y, a la vez, permitir personalizar los pasos concretos, se consolidó la lógica en un Template Method: un método orquestador define el algoritmo y delega en métodos auxiliares sobrescribibles los puntos de variación. Así reducimos duplicidad, clarificamos el orden de las operaciones y evitamos desalineaciones entre controladores.
+
+Al mismo tiempo, Unity puede destruir o recrear objetos de escena fuera de nuestro control; referencias a `GameObject`, `Transform` o servicios pueden quedar nulas entre frames. Para evitar excepciones intermitentes y capturar mejor la intención de "no hay nada que hacer", se introdujeron guards/Null-checks siguiendo el espíritu de Null Object: preferimos un comportamiento seguro y explícito ante referencias faltantes (o instancias nulas) en lugar de confiar en que siempre existirán. Esto endurece el flujo frente a cambios de escena y facilita pruebas.
+
 - `CharacterViewController.HandleSmartFlow()` implementa un template method donde el esqueleto del algoritmo está en un método y pasos concretos son métodos auxiliares.
 - Se añadió uso extendido de guards/Null-checks (Null Object pattern concept) para robustez frente a cambios de escena.
 
@@ -216,99 +211,6 @@ IMPORTANTE: cuando cito archivos uso la ruta relativa al repositorio; por ejempl
 
 Si desea, continúo con la acción propuesta (mover la lógica pura a `Core/Domain/Logic` y actualizar `asmdef`), o genero la lista completa de tests con rutas y descripciones. ¿Cuál prefiere que haga ahora? 
 
-
-## 🎯 Objetivos de la Refactorización
-
-1. Aplicar principios **SOLID**
-2. Implementar **Clean Architecture**
-3. Usar **Patrones de Diseño** apropiados
-4. Implementar **Persistencia** desacoplada
-5. **Evitar sobreingeniería** - mantener simplicidad
-
----
-
-## 📁 ESTRUCTURA DE CARPETAS CREADAS
-
-```
-src/maple-fighters/Assets/Maple Fighters/Scripts/
-├── Core/                                    # 🆕 NUEVA - Capa de infraestructura core
-│   ├── Domain/                              # 🆕 Capa de dominio (interfaces)
-│   │   └── Interfaces/                      # 🆕 Contratos/abstracciones
-│   │       ├── ISaveService.cs              # Persistencia
-│   │       ├── IApiProvider.cs              # Factory de APIs
-│   │       ├── INetworkConfiguration.cs     # Configuración de red
-│   │       ├── IInputService.cs             # Abstracción de input
-│   │       ├── IAuthenticationValidator.cs  # Validación de autenticación
-│   │       ├── IEntityRepository.cs         # Repository de entidades
-│   │       ├── IEntityFactory.cs            # Factory de entidades
-│   │       ├── IGameEntity.cs               # Entidad base del juego
-│   │       ├── IPlayerCredentials.cs        # 🆕 Datos de credenciales de jugador
-│   │       ├── IPlayerRepository.cs         # 🆕 Repository de jugadores
-│   │       ├── ICredentialValidator.cs      # 🆕 Validación de credenciales
-│   │       ├── ILoginAttemptTracker.cs      # 🆕 Tracking de intentos de login
-│   │       └── IAdminService.cs             # 🆕 Servicios de administración
-│   │
-│   └── Infrastructure/                      # 🆕 Implementaciones concretas
-│       ├── ServiceLocator.cs                # Localizador de servicios
-│       ├── ServiceLocatorInitializer.cs     # Inicializador (MonoBehaviour)
-│       ├── Persistence/                     # 🆕 Servicios de persistencia
-│       │   ├── JsonSaveService.cs           # Implementación JSON (archivos) / PlayerPrefs (WebGL)
-│       │   └── PlayerPrefsSaveService.cs    # Implementación PlayerPrefs
-│       ├── Configuration/                   # 🆕 Adaptadores de configuración
-│       │   └── NetworkConfigurationAdapter.cs
-│       ├── Services/                        # 🆕 Servicios de aplicación
-│       │   ├── ApiProviderService.cs        # Implementación IApiProvider (siempre usa DummyCharacterProviderApi)
-│       │   ├── UnityInputService.cs         # Implementación IInputService
-│       │   ├── CredentialValidator.cs       # 🆕 Validación de credenciales
-│       │   ├── LoginAttemptTracker.cs       # 🆕 Tracking de intentos
-│       │   └── AdminService.cs              # 🆕 Servicio de administración
-│       ├── Repositories/                    # 🆕 Repositorios
-│       │   ├── EntityRepository.cs          # Implementación IEntityRepository
-│       │   └── PlayerRepository.cs          # 🆕 Implementación IPlayerRepository
-│       └── Factories/                       # 🆕 Fábricas
-│           └── EntityFactory.cs             # Implementación IEntityFactory
-│
-├── Services/
-│   └── PlayerLoginApi/                      # 🆕 NUEVA - API de login de jugadores
-│       ├── IPlayerLoginApi.cs               # Interface de la API
-│       ├── DummyPlayerLoginApi.cs           # Implementación local/desarrollo
-│       ├── PlayerLoginSettings.cs           # Configuración del sistema
-│       └── Data/
-│           └── PlayerCredentialsData.cs     # Estructura de datos
-│
-├── Gameplay/
-│   └── Player/
-│       └── Components/                      # 🆕 Componentes extraídos
-│           ├── GroundDetector.cs            # Detección de suelo
-│           └── PlayerEffects.cs             # Efectos visuales
-│
-└── UI/
-    ├── Authenticator/
-    │   ├── View/                            # 🆕 Interfaces de vista
-    │   │   └── ILoginView.cs
-    │   └── Presenter/                       # 🆕 Presentadores MVP
-    │       ├── LoginPresenter.cs
-    │       └── RegistrationPresenter.cs
-    │
-    ├── GameMenu/                            # 🆕 NUEVA - Menú del juego
-    │   └── GameMenuPanel.cs                 # Panel de menú con logout (ESC)
-    │
-    └── PlayerLogin/                         # 🆕 NUEVA - Sistema de login por nombre
-        ├── Controller/
-        │   ├── PlayerLoginController.cs     # Controlador principal
-        │   └── PlayerLoginIntegration.cs    # Integración con sistema existente
-        ├── View/
-        │   ├── IPlayerLoginView.cs          # Interface de la vista
-        │   └── PlayerLoginState.cs          # Estados del login
-        ├── Presenter/
-        │   └── PlayerLoginPresenter.cs      # Lógica de presentación (MVP)
-        ├── Window/
-        │   └── PlayerLoginWindow.cs         # Ventana UI
-        └── Admin/
-            └── AdminPanel.cs                # Panel de administración (F12)
-```
-
----
 
 ## 🔷 PRINCIPIOS SOLID APLICADOS
 
