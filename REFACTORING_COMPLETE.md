@@ -2,6 +2,221 @@
 
 ---
 
+## **Análisis EXTREMADAMENTE detallado por patrón (definición, por qué, dónde, código, pruebas, trade-offs)**
+
+Esta subsección amplía aún más la documentación anterior. Aquí se explica cada patrón aplicado con un nivel de detalle técnico pensada para un mantenedor: intención del patrón, cuándo preferirlo, fragmentos de código reales/representativos del proyecto, exactas rutas de archivo donde está implementado y cómo afecta a pruebas/CI/depuración.
+
+IMPORTANTE: cuando cito archivos uso la ruta relativa al repositorio; por ejemplo `Core/Infrastructure/ServiceLocator.cs` se expande a `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocator.cs`.
+
+---
+
+### Service Locator — detalle completo
+
+- Definición técnica
+    - Un registro global que mapea tipos/interfaces a instancias o factories. Soporta `Register<T>(T service)` y `TryGet<T>(out T service)`.
+
+- Propósito explícito en este proyecto
+    - Evitar introducir un contenedor DI completo y permitir una inicialización central desde un MonoBehaviour (`ServiceLocatorInitializer`) sin tener que modificar decenas de MonoBehaviours para pasar dependencias por constructor.
+
+- Archivo(s)
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocator.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocatorInitializer.cs`
+
+- Uso práctico (callsites)
+    - UI/Presenters: obtienen `IAuthenticationValidator`, `ISaveService`.
+    - Gameplay: `EntityContainer` obtiene `IEntityRepository`/`IEntityFactory`.
+
+- Snippet (representativo)
+    ```csharp
+    // ServiceLocatorInitializer.Awake()
+    ServiceLocator.Register<ISaveService>(new JsonSaveService());
+    ServiceLocator.Register<IEntityRepository>(new EntityRepository());
+
+    // Consumer
+    if (ServiceLocator.TryGet(out IPlayerRepository playerRepo)) {
+            var p = playerRepo.FindByName(name);
+    }
+    ```
+
+- Implicaciones para testing
+    - Tests unitarios pueden sustituir servicios añadiendo `ServiceLocator.Register<ISaveService>(mockSave)` en el setup del test. Esto permite tests puros de `LoginPresenter` o handlers sin modificar el wiring.
+
+- Trade-offs y mitigaciones
+    - Trade-off: ocultamiento de dependencias. Mitigación: documentar en `ServiceLocatorInitializer` qué servicios se registran (se añadió en la documentación) y preferir pasar explícitamente dependencias en clases nuevas.
+
+---
+
+### Repository — detalle completo
+
+- Definición técnica
+    - Abstracción (interfaz) que ofrece operaciones CRUD y queries sobre colecciones de entidades del dominio.
+
+- Propósito en el proyecto
+    - Evitar acoplar la lógica de aplicación a Unity `GameObject`s y permitir implementaciones en memoria o persistentes.
+
+- Archivo(s)
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Domain/Interfaces/IEntityRepository.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Repositories/EntityRepository.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Repositories/PlayerRepository.cs`
+
+- API pública (contrato)
+    - `IGameEntity GetLocalEntity();`
+    - `bool TryGetEntity(int id, out IGameEntity entity);`
+    - `void AddEntity(int id, IGameEntity entity);`
+    - `bool RemoveEntity(int id);`
+    - `void Clear();`
+
+- Ejemplo de interacción
+    - Al entrar en escena, `EntityContainer` registra entidades en `IEntityRepository`. Al destruir la escena, `EntityContainer.OnDisable()` llama `entityRepository.Clear()`.
+
+- Testing
+    - Reemplazar `IEntityRepository` por una implementación en memoria (o NSubstitute) para tests unitarios de managers y handlers. Los tests pueden verificar que `AddEntity` fue llamado o que `TryGetEntity` devuelve la entidad esperada.
+
+---
+
+### Factory — detalle completo
+
+- Definición técnica
+    - Encapsula la creación de objetos complejos (prefabs, inicialización de componentes). En Unity, centraliza `Resources.Load` y `Instantiate`.
+
+- Propósito en el proyecto
+    - Aislar la lógica de instanciación (nombres de recursos, path, post-configuración) y permitir sustituir la fábrica en tests o para variaciones de contenido.
+
+- Archivo(s)
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Domain/Interfaces/IEntityFactory.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Factories/EntityFactory.cs`
+
+- Ejemplo real (representativo)
+    ```csharp
+    public IGameEntity CreateEntity(string name, Vector2 position) {
+            var path = string.Format(Paths.Resources.Game.Entities, name);
+            var prefab = Resources.Load<GameObject>(path);
+            var go = Object.Instantiate(prefab, position, Quaternion.identity);
+            var entity = go.GetComponent<Entity>();
+            entity.Initialize(...);
+            return entity;
+    }
+    ```
+
+- Consideraciones
+    - Para tests puros evitar `Instantiate`: mockear `IEntityFactory` o implementar una `TestEntityFactory` que devuelva objetos no-MonoBehaviour.
+
+---
+
+### Strategy — detalle completo
+
+- Definición técnica
+    - Permite seleccionar entre varias implementaciones de una misma familia de algoritmos en tiempo de ejecución.
+
+- Aplicaciones concretas
+    - `ISaveService` → `JsonSaveService` (archivos) o `PlayerPrefsSaveService` (WebGL fallback).
+    - `IInputService` → `UnityInputService` (entrada real) o potencial `AIInputService` para bots.
+
+- Archivo(s)
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Domain/Interfaces/ISaveService.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Persistence/JsonSaveService.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Persistence/PlayerPrefsSaveService.cs`
+
+- Cómo se selecciona
+    - En `ServiceLocatorInitializer`, se detecta la plataforma (`#if UNITY_WEBGL`) y se registra la estrategia adecuada. En configuración local se puede forzar una estrategia concreta en `ServiceLocatorInitializer`.
+
+- Implicaciones de datos
+    - Garantizar compatibilidad de formato JSON entre estrategias (si se cambia schema puede requerirse migración de datos en `JsonSaveService`).
+
+---
+
+### Adapter — detalle completo
+
+- Definición técnica
+    - Permite que clases con interfaces incompatibles colaboren mediante una clase adaptadora.
+
+- Uso en repo
+    - `NetworkConfigurationAdapter` — permite que un `ScriptableObject` (config asset del Editor) cumpla con `INetworkConfiguration` sin exponer `ScriptableObject` en capas superiores.
+    - `PlayerLoginIntegration` — actúa como adaptador entre callbacks de la API antigua y el nuevo flujo que usa `IPlayerCredentials`.
+
+- Archivos
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Configuration/NetworkConfigurationAdapter.cs`
+
+- Beneficios
+    - Mantiene separado el código runtime del código de Editor/Assets y facilita testing puesto que `INetworkConfiguration` puede ser mocked.
+
+---
+
+### MVP — detalle completo
+
+- Definición técnica
+    - Separación de responsabilidades en vista (View), presentación (Presenter) y modelo/servicios.
+
+- Por qué en Unity
+    - Las MonoBehaviours están fuertemente ligados al ciclo de vida de Unity y no son fáciles de testear en unit tests. El presenter es un POCO que contiene la lógica de UI y puede ser probado fuera del Editor.
+
+- Archivos concretos
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/UI/Authenticator/ILoginView.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/UI/Authenticator/LoginPresenter.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/UI/Authenticator/LoginWindow.cs`
+
+- Ejemplo de prueba recomendada
+    - Crear un `LoginPresenterTests` en EditMode que use un `ILoginView` mock (NSubstitute in backend or a simple test double in Unity) y un mock de `IAuthenticationValidator`, verificar que `ShowError` o `NavigateToCharacterSelection` son llamados.
+
+---
+
+### State — detalle completo
+
+- Definición técnica
+    - Encapsula comportamiento dependiente de estado en clases separadas que implementan una interfaz común.
+
+- Implementación
+    - `IPlayerStateBehaviour` y varias implementaciones (Idle, Running, Jumping) mantenidas por `PlayerController`.
+
+- Beneficio
+    - Testing por estado: cada `IPlayerStateBehaviour` puede ser probado por separado si su lógica está desacoplada de MonoBehaviour.
+
+---
+
+### Singleton + Observer — detalle completo
+
+- Definición técnica
+    - Singletons proporcionan acceso global; Observers (eventos) notifican cambios.
+
+- Correcciones durante refactor
+    - Se detectaron memory leaks y `MissingReferenceException` al cambiar de escena; se añadió limpieza en `OnDestroy()` y `OnDisable()` para remover listeners y poner `instance = null` en singletons.
+
+- Archivos
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Networking/DummyGameApi.cs`
+    - `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ApiProvider.cs`
+
+---
+
+### Facade — detalle completo
+
+- Definición técnica
+    - Simplifica acceso a un subsistema complejo exponiendo una interfaz más simple.
+
+- Aplicación
+    - `AdminService` agrupa llamadas a repositorios y `ISaveService` para operaciones administrativas (listar/desbloquear usuarios) y se registra en `ServiceLocator`.
+
+---
+
+### Template Method y Null Object — detalle rápido
+
+- `CharacterViewController.HandleSmartFlow()` implementa un template method donde el esqueleto del algoritmo está en un método y pasos concretos son métodos auxiliares.
+- Se añadió uso extendido de guards/Null-checks (Null Object pattern concept) para robustez frente a cambios de escena.
+
+---
+
+## Impacto en CI y ejecución automatizada
+
+- Backend
+    - Ejecutar `dotnet test` en `src/game-service` prueba la capa de aplicación y dominio. Recomiendo añadir `--collect:"XPlat Code Coverage"` y publicar el resultado en la pipeline.
+
+- Unity
+    - Para tests automáticos en CI: ejecutar Unity en batch mode con `-runTests` y filtrar por EditMode/PlayMode. Recomendación: usar `game-ci` o `Unity Builder` actions en GitHub Actions.
+
+---
+
+Si desea, continúo con la acción propuesta (mover la lógica pura a `Core/Domain/Logic` y actualizar `asmdef`), o genero la lista completa de tests con rutas y descripciones. ¿Cuál prefiere que haga ahora? 
+
+
 ## 🎯 Objetivos de la Refactorización
 
 1. Aplicar principios **SOLID**
@@ -1641,6 +1856,126 @@ public class ApiProviderService : IApiProvider
  
 ---
 
+## **Cómo funciona el proyecto (visión general, carpetas y archivos clave)**
+
+Esta sección describe de forma práctica qué hace cada carpeta y los archivos más relevantes del repositorio, cómo encajan entre sí y cómo interactuar con ellos (ejecución / pruebas). Está pensada como guía rápida para un mantenedor que llega al proyecto.
+
+- **Raíz del repositorio**: contiene documentación, configuraciones Docker / Kubernetes y el README.
+    - `README.md`: instrucciones generales del proyecto, cómo levantar servicios y referencias básicas.
+    - `REFACTORING_COMPLETE.md`: este documento (estado y detalle de la refactorización).
+    - `docker-compose.yml`, `docker-compose.prod.yml`: orquestación local / producción (servicios auxiliares si se usaran).
+    - `kustomize/`: manifiestos k8s usados para despliegue (opcional para despliegues en clúster).
+
+- **`src/game-service/` (Backend - Game Service)**:
+    - `GameService.sln`: solución .NET que agrupa los proyectos del servidor.
+    - `Game.Application/`: lógica de aplicación (casos de uso, handlers, DTOs). Aquí viven los servicios que procesan mensajes del juego.
+    - `Game.Domain/`: modelos de dominio y contratos relevantes para negocio (entidades, ValueObjects, interfaces del dominio).
+    - `Game.Infrastructure/`: adaptadores (repositorios, persistencia, mapeos) para el backend.
+    - `Game.Server/`: capa de entrada (Sockets / HTTP / handlers) que recibe eventos externos y delega a `Game.Application`.
+    - `Game.UnitTests/`: pruebas unitarias xUnit + NSubstitute + Shouldly. Ejecutar con `dotnet test`.
+    - Qué hace: procesa la lógica del servidor (mecánicas del juego que no dependen de Unity) y expone endpoints / handlers que el cliente puede usar o que se usan en simulaciones.
+
+- **`src/maple-fighters/` (Cliente Unity)**:
+    - `maple-fighters.sln`, `Assembly-CSharp.csproj`, `Assembly-CSharp-Editor.csproj`: proyectos del cliente Unity (generados por Unity).
+    - `Assets/Maple Fighters/Scripts/`: el código fuente principal del cliente separado por capas (Core, UI, Gameplay, Services y demás). Puntos clave:
+        - `Core/Domain/Interfaces/`: interfaces/contratos (por ejemplo `ISaveService`, `IEntityRepository`, `IInputService`) — la capa que define el contrato estable.
+        - `Core/Infrastructure/`: implementaciones concretas (por ejemplo `JsonSaveService`, `ServiceLocator`, `EntityFactory`).
+        - `UI/`: vistas y presentadores (MVP) — `ILoginView`, `LoginPresenter`, `PlayerLoginWindow`.
+        - `Gameplay/`: componentes de juego (`PlayerController`, `GroundDetector`, `PlayerEffects`, comportamientos de mobs).
+        - `Services/`: adaptadores/`Dummy*` APIs usados en desarrollo (`DummyCharacterProviderApi`, `DummyGameApi`).
+    - `Assets/Tests/EditMode/` y `Assets/Tests/PlayMode/`: pruebas Unity (EditMode = lógica pura; PlayMode = tests que usan frames / coroutines).
+    - Qué hace: ejecuta la parte cliente del juego (render, input, UI, flujo de login y selección de personajes). Se conecta a los `Dummy*` providers para persistencia local en desarrollo.
+
+- **`lib/interest-management/` (librería independiente)**:
+    - Código reutilizable para manejo de áreas de interés y detección de proximidad (clases como `InterestArea`, `MatrixRegion`, `NearbySceneObjectsCollection`).
+    - Uso: utilizable por el juego para optimizar qué entidades deben procesarse en función de la proximidad.
+
+- **`src/frontend/`**:
+    - Proyecto web (React / SPA) usado para el frontend de la parte web si existe. Contiene `Dockerfile`, `nginx.conf` y `package.json`.
+    - Qué hace: sirve recursos estáticos, UI web o admin panels si se integran.
+
+- **`release/` y `docs/`**:
+    - `release/kubernetes-manifests.yaml`: manifiestos para releases.
+    - `docs/`: imágenes y documentación complementaria.
+
+### Archivos y componentes críticos (ruta → qué hace / por qué es importante)
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocator.cs`:
+    - Qué hace: registro y resolución global de servicios. Permite inyectar dependencias sin introducir un contenedor DI pesado.
+    - Por qué es crítico: muchos módulos obtienen servicios desde aquí; cambiarlo afecta al wiring de la app.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocatorInitializer.cs`:
+    - Qué hace: MonoBehaviour que configura e instancia implementaciones concretas en `Awake()` (ej. `ISaveService`, `IEntityRepository`).
+    - Nota operativa: editar este archivo cambia la configuración por defecto usada en tiempo de ejecución.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Persistence/JsonSaveService.cs`:
+    - Qué hace: persistencia multi-plataforma (archivos en standalone, `PlayerPrefs` en WebGL).
+    - Impacto: guarda y restaura el progreso del jugador, personajes y configuraciones. Un bug aquí puede corromper los saves.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Persistence/PlayerPrefsSaveService.cs`:
+    - Qué hace: fallback de persistencia para plataformas que no soportan archivos (WebGL).
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Repositories/EntityRepository.cs`:
+    - Qué hace: almacena referencias a entidades del juego y gestiona su ciclo de vida lógico (Add/Remove/Clear).
+    - Importancia: evita referencias a `GameObject` destruidos y facilita la sincronización con el servidor.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Factories/EntityFactory.cs`:
+    - Qué hace: encapsula `Resources.Load` + `Instantiate` y cualquier configuración post-inicialización.
+    - Recomendación: mockear en tests unitarios para evitar instanciación de `GameObject`.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Gameplay/Player/PlayerController.cs`:
+    - Qué hace: orchestrador principal del jugador (lee input, gestiona estados y coordina componentes). Tras refactor, delega a `IInputService`, `GroundDetector` y `PlayerEffects`.
+    - Nota: mantener este archivo estable; las reglas de juego suelen residir aquí (transiciones de estado, físicas básicas).
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Gameplay/Player/Components/GroundDetector.cs`:
+    - Qué hace: detecta si el jugador está en suelo y expone eventos o métodos para el `PlayerController`.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/UI/Authenticator/LoginPresenter.cs` y `ILoginView.cs`:
+    - Qué hacen: separan la lógica de la vista (validaciones, navegación) de la UI concreta (LoginWindow). Muy útiles para pruebas unitarias sin Unity Editor.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Services/DummyCharacterProviderApi.cs`:
+    - Qué hace: proveedor local para crear/guardar/leer personajes; persistencia usa `ISaveService`.
+    - Importancia: en desarrollo y pruebas sirve como fuente única de verdad para personajes; su comportamiento afecta la experiencia del jugador (creación / listado de personajes).
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Character/CharacterViewController.cs`:
+    - Qué hace: controla la selección y creación de personajes. Contiene el `HandleSmartFlow()` que decide si crear o entrar al juego tras login.
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/User/UserMetadata.cs`:
+    - Qué hace: contiene la información de sesión (userId, personaje seleccionado) y se integra con `ISaveService`.
+    - Importancia: vínculo entre cuenta y personajes; corrección de `userId` fue crítica para evitar compartir personajes entre cuentas.
+
+- `src/game-service/Game.UnitTests/`:
+    - Qué contiene: pruebas unitarias del backend. Estructura por features / handlers.
+    - Cómo ejecutar: desde la raíz del repo:
+        ```pwsh
+        dotnet restore src/game-service/GameService.sln
+        dotnet test src/game-service/Game.UnitTests/Game.UnitTests.csproj
+        ```
+
+### Cómo realizar cambios seguros y pruebas locales
+
+- Para cambiar persistencia:
+    1. Modifique `JsonSaveService.cs` y `PlayerPrefsSaveService.cs`.
+    2. Ejecute pruebas locales (Unity Editor + backend tests) y valide save/restore.
+
+- Para cambiar la API dummy (persistencia de personajes):
+    1. Modifique `DummyCharacterProviderApi.cs` (filtros y almacenamiento).
+    2. Abra Unity → arranque el flujo de login → cree/registre personajes para verificar que se guardan y cargan.
+
+- Para añadir tests Unity EditMode correctamente:
+ 1. Mover la lógica pura a `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Domain/Logic`.
+ 2. Crear un asmdef para `Core.Domain.Logic` y referenciarlo desde `Assets/Tests/EditMode/*.asmdef`.
+ 3. Escribir pruebas NUnit `[Test]` en `Assets/Tests/EditMode/` apuntando a las clases del `Core.Domain.Logic`.
+
+---
+
+Si quiere, puedo:
+- (A) Mover ahora las clases de lógica pura de `Assets/Tests/EditMode/GameLogic.cs` a `Core/Domain/Logic` y actualizar `asmdef` (recomendado), o
+- (B) Generar un listado exhaustivo de archivos críticos con una breve descripción en CSV/MD para referencia rápida.
+
+Indique qué prefiere y lo hago a continuación.
+
+
 ## **Unity Tests**
 
 - **Resumen**: Se implementaron pruebas unitarias para el cliente Unity en **EditMode** y **PlayMode** usando el Unity Test Runner (NUnit). Las pruebas EditMode son pruebas puras de C# (sin dependencias de Unity runtime) y las PlayMode usan `UnityTest` para pruebas que requieren el ciclo de frames.
@@ -1685,4 +2020,178 @@ public class ApiProviderService : IApiProvider
 ---
 
 Si desea, puedo crear una sección separada con la lista completa de tests (nombres de tests y rutas exactas) o mover las clases de lógica pura a `Core/Domain/Logic` para evitar duplicación —¿quiere que haga eso ahora?
+
+## **Análisis Detallado de la Refactorización**
+
+Este apartado explica en profundidad qué se hizo durante la refactorización, por qué se tomaron las decisiones arquitectónicas y exactamente en qué archivos y capas se aplicaron los cambios. Está pensado como guía técnica para desarrolladores que deban mantener, revisar o ampliar el trabajo.
+
+**Resumen (rápido):**
+- **Objetivo principal:** separar responsabilidades, facilitar testeo y permitir evolución sin romper código existente.
+- **Estrategia:** aplicar Clean Architecture + principios SOLID y patrones (Service Locator, Repository, Factory, Adapter, Strategy, MVP, etc.) manteniendo compatibilidad mediante fallbacks.
+
+### **1) Capas del sistema y responsabilidades**
+
+- **Core / Domain (`src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Domain`)**: contiene las abstracciones (interfaces) y modelos de dominio. Propósito: definir contratos estables que no dependen de Unity ni de infraestructuras concretas.
+    - Ejemplos de archivos y responsabilidades:
+        - `IEntityRepository.cs`: contrato para almacenamiento de entidades en memoria o persistencia.
+        - `IPlayerRepository.cs`: contrato para almacenar/consultar jugadores.
+        - `IPlayerCredentials.cs`, `IGameEntity.cs`: DTOs / contratos de negocio.
+    - Por qué: reducir acoplamiento y permitir mocks en tests unitarios.
+
+- **Core / Infrastructure (`.../Core/Infrastructure`)**: implementaciones concretas que adaptan las abstracciones a Unity/entorno.
+    - Archivos clave:
+        - `ServiceLocator.cs` / `ServiceLocatorInitializer.cs`: registro y resolución de servicios en tiempo de ejecución.
+        - `JsonSaveService.cs`, `PlayerPrefsSaveService.cs`: estrategia de persistencia (plataforma-aware).
+        - `NetworkConfigurationAdapter.cs`: adapta ScriptableObjects a `INetworkConfiguration`.
+    - Por qué: aislar dependencias de plataforma y centralizar adaptaciones.
+
+- **Services (`src/maple-fighters/Assets/Maple Fighters/Scripts/Services`)**: capas que implementan adaptadores y providers (APIs de desarrollo local, dummy APIs).
+    - `ApiProviderService.cs`: fábrica de APIs usada por la aplicación (siempre devuelve `DummyCharacterProviderApi` localmente para persistencia consistente en desarrollo).
+    - Por qué: permitir cambiar proveedor remoto sin tocar lógica de negocio.
+
+- **Gameplay (`/.../Gameplay`)**: componentes y Behaviour específicos del juego (ej. `PlayerController`, `GroundDetector`, `PlayerEffects`). Mantienen la interacción con Unity (MonoBehaviours) y delegan lógica a clases testables.
+
+- **UI (`/.../UI`)**: pantallas y la implementación del patrón MVP para vistas como login.
+    - `LoginPresenter.cs` (presenter) y `ILoginView.cs` (contrato de vista)
+    - Por qué: separar lógica de UI de la vista para permitir testing unitario y reutilización.
+
+- **Tests (Unity y Backend)**
+    - Unity EditMode tests: `src/maple-fighters/Assets/Tests/EditMode/*` (pruebas rápidas, lógica pura)
+    - Unity PlayMode tests: `src/maple-fighters/Assets/Tests/PlayMode/*` (pruebas con `UnityTest` y ciclo de frames)
+    - Backend tests (Game Service): `src/game-service/Game.UnitTests/*` (xUnit + NSubstitute + Shouldly)
+
+### **2) Patrones aplicados, dónde y por qué (detalle técnico)**
+
+- **Service Locator**
+    - Dónde: `Core/Infrastructure/ServiceLocator.cs`, `ServiceLocatorInitializer.cs`.
+    - Qué hace: registro global / simple contenedor de servicios para resolver implementaciones.
+    - Por qué se eligió: proyecto pequeño, queríamos una solución ligera y no introducir una dependencia externa (Zenject). Permite desacoplamiento y facilita la inyección manual en puntos de entrada. Además se mantiene fallback para compatibilidad (si no hay servicio, se usan colecciones locales).
+    - Consideraciones: no es un contenedor DI completo (no composición profunda ni scope). Recomendación futura: migrar a un DI container (Zenject o Microsoft.Extensions.DependencyInjection) si la complejidad crece.
+
+- **Repository Pattern**
+    - Dónde: `IEntityRepository.cs`, `EntityRepository.cs`, `PlayerRepository.cs`.
+    - Qué hace: abstrae colección/almacenamiento de entidades para que la lógica de juego no dependa de Unity `GameObject` directamente.
+    - Beneficio: permite tests unitarios de lógica de negocio usando implementaciones en memoria o mocks.
+
+- **Factory Pattern**
+    - Dónde: `IEntityFactory.cs`, `EntityFactory.cs`, `ApiProvider.ProvidePlayerLoginApi()`.
+    - Qué hace: centraliza la creación de objetos complejos (entidades, APIs). Oculta detalles de `Resources.Load` o `Instantiate`.
+    - Ejemplo corto:
+        ```csharp
+        public IGameEntity CreateEntity(string name, Vector2 position) {
+                var prefab = Resources.Load<GameObject>(path);
+                var go = Object.Instantiate(prefab, position, Quaternion.identity);
+                return go.GetComponent<Entity>();
+        }
+        ```
+
+- **Strategy Pattern**
+    - Dónde: `ISaveService` + `JsonSaveService` / `PlayerPrefsSaveService`; `ICredentialValidator` y sus implementaciones.
+    - Qué hace: permite intercambiar comportamientos en tiempo de ejecución (persistencia en archivo vs PlayerPrefs, validadores de credenciales).
+
+- **Adapter Pattern**
+    - Dónde: `NetworkConfigurationAdapter.cs` y `PlayerLoginIntegration` (al adaptar la API existente al nuevo flujo).
+    - Qué hace: adapta ScriptableObjects y APIs antiguas a las nuevas interfaces.
+
+- **MVP (Model-View-Presenter)**
+    - Dónde: `UI/Authenticator/ILoginView.cs`, `LoginPresenter.cs`, `LoginWindow.cs`.
+    - Qué hace: separa la vista (Unity UI/MonoBehaviour) de la lógica de presentación, facilitando testeo del presenter sin UI.
+    - Ejemplo: `LoginPresenter` recibe una instancia de `ILoginView` (mockeable) y llama a `ILoginView.ShowError()` sin depender de Unity UI.
+
+- **State Pattern**
+    - Dónde: `PlayerController` mantiene comportamientos de estado (`IPlayerStateBehaviour`).
+    - Qué hace: encapsula estados de jugador y facilita transiciones claras.
+
+- **Singleton + Observer (eventos)**
+    - Dónde: `DummyGameApi` y algunos `ApiProvider` implementan singletons; eventos C# (o UnityEvents) se usan para notificaciones de escena/servidor.
+    - Qué hace: simplifica acceso global y notificación de cambios. Se agregó limpieza en `OnDestroy()` para evitar leaks y excepciones.
+
+- **Facade**
+    - Dónde: `AdminService` simplifica operaciones administrativas complejas.
+
+### **3) Cambios concretos y sus efectos (archivo → impacto)**
+
+- `ServiceLocator.cs` / `ServiceLocatorInitializer.cs`
+    - Impacto: centraliza la configuración en runtime; facilita swapping de implementaciones en `Awake` (ej. `ServiceLocator.Register<ISaveService>(new JsonSaveService())`).
+    - Testabilidad: los tests pueden registrar mocks en el `ServiceLocator` antes de ejecutar la lógica.
+
+- `JsonSaveService.cs` / `PlayerPrefsSaveService.cs`
+    - Impacto: persistencia adaptable por plataforma; `JsonSaveService` detecta WebGL y usa `PlayerPrefs` cuando corresponda.
+    - Por qué: WebGL no tiene filesystem tradicional → IndexedDB via PlayerPrefs.
+
+- `EntityRepository.cs`, `EntityFactory.cs`
+    - Impacto: el `EntityContainer` dejó de crear/gestionar entidades directamente; ahora delega a `IEntityRepository`/`IEntityFactory`. Reduce uso de `FindObjectOfType`.
+
+- `PlayerController.cs` y nuevos componentes (`GroundDetector`, `PlayerEffects`) 
+    - Impacto: separación de responsabilidades (SRP), facilita pruebas de física y lógica por separado.
+
+- `PlayerLogin*` (LoginPresenter, PlayerLoginIntegration, PlayerRepository, CredentialValidator, LoginAttemptTracker)
+    - Impacto: nuevo flujo de login con bloqueo por intentos y administración. Presenter y servicios testables independientemente de la UI.
+
+### **4) Tests: estructura, herramientas y decisiones**
+
+- **Backend (Game Service)**
+    - Frameworks: `xUnit` para pruebas, `NSubstitute` para mocks, `Shouldly` para aserciones legibles. `coverlet` para cobertura.
+    - Ubicación: `src/game-service/Game.UnitTests/`.
+    - Estructura adoptada: organizar tests por feature/handler (p. ej. `Handlers/AttackMobMessageHandlerTests.cs`).
+    - Observaciones: proyectos actualizados a `net6.0` por compatibilidad con SDK disponible (antes `net5.0`).
+
+- **Cliente Unity**
+    - Framework: Unity Test Runner (NUnit-based). EditMode tests (NUnit [Test]) para lógica pura y PlayMode (UnityTest) para tests con frame/coroutines.
+    - Ubicación: `src/maple-fighters/Assets/Tests/EditMode/*` y `.../PlayMode/*`.
+    - Decisiones importantes:
+        - Se creó `EditMode` asmdef para aislar pruebas que no necesitan Unity runtime.
+        - Se actualizó `PlayMode` asmdef para referenciar el Test Runner y permitir uso de `UnityTest` sin errores de compilación.
+        - Para evitar dependencias del asmdef del proyecto principal, se puso una copia ligera de las clases de lógica pura en `Assets/Tests/EditMode/GameLogic.cs`. Esto es una medida temporal —lo ideal es mover esas clases a `Core/Domain/Logic` y referenciarlas desde el código de juego y tests.
+
+### **5) Cómo ejecutar y verificar (rápido, reproducible)**
+
+- Backend (dotnet):
+    - Requisitos: .NET SDK 6.0+ instalado.
+    - Comandos:
+        ```pwsh
+        # desde la raíz del repo
+        dotnet restore src/game-service/GameService.sln
+        dotnet test src/game-service/Game.UnitTests/Game.UnitTests.csproj --logger "console;verbosity=detailed"
+        ```
+    - Resultado esperado: tests discover + run; la ejecución local mostró `Total: 67, Passed: 67` en mi entorno.
+
+- Cliente Unity:
+    - Abrir proyecto en Unity Editor compatible con la versión del proyecto.
+    - Window → General → Test Runner → seleccionar EditMode o PlayMode → Run All.
+    - Observación: EditMode tests son muy rápidos; PlayMode puede requerir esperar frames.
+
+### **6) Decisiones técnicas y trade-offs**
+
+- Migración a `net6.0` (Game Service)
+    - Razón: entorno de desarrollo no tenía .NET 5 runtime; .NET 6 es LTS y ampliamente disponible.
+    - Efecto: compilación y ejecución de tests en CI locales y desarrolladores más sencillo.
+
+- Service Locator vs DI Container
+    - Justificación: evitar añadir dependencia externa y mantener configuración simple. A corto plazo fue la opción pragmática. A medio-largo plazo, si el proyecto crece, recomiendo migrar a un container DI para mejores garantías de scope, ciclo de vida y test fixtures.
+
+- Duplicación temporal de lógica en `Assets/Tests/EditMode/GameLogic.cs`
+    - Por qué se hizo: evitar cambios intrusivos en el código principal para poder demostrar pruebas en Unity rápidamente.
+    - Recomendación: refactorizar a `Core/Domain/Logic` y referenciar ese ensamblado desde los tests (remover duplicación).
+
+### **7) Mapa de archivos clave y responsabilidades (rápido referenciamiento)**
+
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Domain/Interfaces/` : interfaces y contratos (persistencia, repositorios, servicios de login).
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/ServiceLocator.cs` : registro/recuperación de servicios.
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Core/Infrastructure/Persistence/JsonSaveService.cs` : persistencia multi-plataforma.
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/UI/Authenticator/LoginPresenter.cs` : presenter de login (testable fuera de Unity UI).
+- `src/maple-fighters/Assets/Maple Fighters/Scripts/Gameplay/Player/GroundDetector.cs` : detección de suelo, extraída de `PlayerController`.
+- `src/game-service/Game.UnitTests/Handlers/` : pruebas por handler del servidor.
+- `src/maple-fighters/Assets/Tests/EditMode/` : tests EditMode (lógica pura).
+
+### **8) Recomendaciones y próximos pasos**
+
+1. Mover clases de lógica pura de `Assets/Tests/EditMode/GameLogic.cs` a `Core/Domain/Logic` y referenciar esa carpeta desde el juego y los tests.
+2. Considerar migración a un DI container (Zenject o Microsoft DI) si el número de servicios y life cycles crece.
+3. Añadir integración de tests al CI (pipeline):
+     - Backend: `dotnet test --collect:"XPlat Code Coverage"` y publicar cobertura.
+     - Unity: usar Unity Test Runner en batch mode (Unity -runTests) o usar GitHub Actions con `game-ci` acciones para ejecutar PlayMode/EditMode.
+4. Completar tests pendientes del plan (ProximityChecker, MobBehaviourManager, MobHealthController).
+
+---
 
