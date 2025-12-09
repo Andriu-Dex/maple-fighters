@@ -1638,4 +1638,51 @@ public class ApiProviderService : IApiProvider
 | Compilación condicional | `#if UNITY_WEBGL && !UNITY_EDITOR` |
 
 ---
+ 
+---
+
+## **Unity Tests**
+
+- **Resumen**: Se implementaron pruebas unitarias para el cliente Unity en **EditMode** y **PlayMode** usando el Unity Test Runner (NUnit). Las pruebas EditMode son pruebas puras de C# (sin dependencias de Unity runtime) y las PlayMode usan `UnityTest` para pruebas que requieren el ciclo de frames.
+- **Herramientas usadas**: **Unity Test Runner** (NUnit) para el cliente Unity. Para el backend se usó **xUnit**, **NSubstitute** y **Shouldly** (ver sección de Game Service).
+- **Archivos añadidos (Unity)**:
+    - `src/maple-fighters/Assets/Tests/EditMode/EditModeTests.asmdef` - Assembly definition para pruebas EditMode.
+    - `src/maple-fighters/Assets/Tests/EditMode/GameLogic.cs` - Clases de lógica pura extraídas/duplicadas para permitir tests sin asmdefs complejos.
+    - `src/maple-fighters/Assets/Tests/EditMode/DamageCalculatorTests.cs`
+    - `src/maple-fighters/Assets/Tests/EditMode/HealthManagerTests.cs`
+    - `src/maple-fighters/Assets/Tests/EditMode/MovementValidatorTests.cs`
+    - `src/maple-fighters/Assets/Tests/EditMode/ScoreCalculatorTests.cs`
+    - `src/maple-fighters/Assets/Tests/PlayMode/PlayModeTests.asmdef` - Assembly definition para pruebas PlayMode (referencia a Unity Test Runner añadida).
+    - `src/maple-fighters/Assets/Tests/PlayMode/GameObjectTests.cs` - Ejemplo de pruebas PlayMode que usan `UnityTest`.
+
+- **Cómo ejecutar (cliente Unity)**:
+    - Abrir el proyecto en Unity Editor.
+    - Window → General → Test Runner.
+    - Ejecutar las pruebas EditMode o PlayMode desde el Test Runner.
+    - Nota: las pruebas EditMode son rápidas y no requieren Play Mode; las PlayMode ejecutan coroutines y pueden tardar más.
+
+- **Resultados y observaciones**:
+    - Las pruebas EditMode añadidas aparecen y pasan correctamente en el Unity Test Runner (confirmado en el Editor).
+    - Se actualizó el `asmdef` de PlayMode para referenciar el runner de tests de Unity y así poder usar `UnityTest` sin errores de compilación.
+    - Mantener la lógica de juego separada de `MonoBehaviour` facilita la testabilidad (p. ej. `DamageCalculator`, `HealthManager`, `MovementValidator`).
+
+- **Notas adicionales**:
+    - Se duplicaron/extraeron clases de lógica pura a `Assets/Tests/EditMode/GameLogic.cs` únicamente para permitir pruebas sin necesidad de asmdefs y evitar acoplamiento con código existente; plan a largo plazo: refactorizar esas clases al espacio `Core/Domain/Logic` y referenciarlas desde el juego y los tests.
+    - Para ejecutar los tests del backend (Game Service): `dotnet test` en `src/game-service/` (requiere .NET SDK 6.0 o superior; los proyectos se actualizaron de `net5.0` a `net6.0`).
+
+---
+
+## **Commit y Cambios Relacionados**
+
+- **Cambios principales realizados en esta tarea**:
+    - `TESTING_PLAN.md` añadido en la raíz del repositorio con el plan de pruebas.
+    - Backend: nuevos tests xUnit en `src/game-service/Game.UnitTests/` y actualización de `Game.Application.csproj` / `Game.UnitTests.csproj` a `net6.0`.
+    - Unity: tests EditMode y PlayMode añadidos bajo `src/maple-fighters/Assets/Tests/` y asmdefs correspondientes.
+    - Documentación: sección `Unity Tests` añadida a `REFACTORING_COMPLETE.md`.
+
+- **Instrucciones de commit**: se ha incluido este cambio en el commit que sigue (mensaje: `chore(tests): add Unity tests documentation and test artifacts; update csproj to net6.0; add TESTING_PLAN.md`).
+
+---
+
+Si desea, puedo crear una sección separada con la lista completa de tests (nombres de tests y rutas exactas) o mover las clases de lógica pura a `Core/Domain/Logic` para evitar duplicación —¿quiere que haga eso ahora?
 
